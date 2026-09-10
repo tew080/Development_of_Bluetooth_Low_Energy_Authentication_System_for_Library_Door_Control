@@ -169,6 +169,68 @@ def open_edit_window(parent):
 
         threading.Thread(target=save_data_task, daemon=True).start()
 
+        # อย่าลืม import add_external_person ใน gui.py จาก db_manager
+    # ==========================================
+    # TAB 4: เพิ่มบุคคลภายนอก (External Person)
+    # ==========================================
+    tab_external = tk.Frame(notebook, bg="#34495e")
+    notebook.add(tab_external, text=" เพิ่มบุคคลภายนอก ")
+
+    ext_center_frame = tk.Frame(tab_external, bg="#34495e")
+    ext_center_frame.pack(expand=True, fill=tk.BOTH, pady=20)
+
+    var_ext_prefix = tk.StringVar()
+    var_ext_fname = tk.StringVar()
+    var_ext_lname = tk.StringVar()
+    var_ext_email = tk.StringVar()
+
+    form_ext = tk.Frame(ext_center_frame, bg="#34495e")
+    form_ext.pack(pady=10)
+
+    ext_fields = [
+        ("คำนำหน้า:", var_ext_prefix),
+        ("ชื่อ:", var_ext_fname),
+        ("นามสกุล:", var_ext_lname),
+        ("อีเมล:", var_ext_email)
+    ]
+
+    for i, (label_text, var) in enumerate(ext_fields):
+        tk.Label(form_ext, text=label_text, bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=i, column=0, sticky="e", pady=8, padx=10)
+        tk.Entry(form_ext, textvariable=var, font=("Arial", 12), width=35).grid(row=i, column=1, pady=8, padx=10)
+
+    def save_external():
+        prefix = var_ext_prefix.get().strip()
+        fname = var_ext_fname.get().strip()
+        lname = var_ext_lname.get().strip()
+        email = var_ext_email.get().strip()
+
+        if not fname:
+            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกชื่อผู้ใช้งานภายนอก")
+            return
+
+        btn_save_ext.config(state="disabled", text="กำลังบันทึก...")
+
+        def save_task():
+            success, result_id = add_external_person(prefix, fname, lname, email)
+            
+            def update_ui():
+                btn_save_ext.config(state="normal", text="บันทึกข้อมูลบุคคลภายนอก")
+                if success:
+                    messagebox.showinfo("สำเร็จ", f"บันทึกสำเร็จ! รหัสผู้ใช้งานภายนอกคือ: {result_id}")
+                    var_ext_prefix.set("")
+                    var_ext_fname.set("")
+                    var_ext_lname.set("")
+                    var_ext_email.set("")
+                else:
+                    messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถบันทึกได้: {result_id}")
+
+            edit_win.after(0, update_ui)
+
+        threading.Thread(target=save_task, daemon=True).start()
+
+    btn_save_ext = tk.Button(ext_center_frame, text="บันทึกข้อมูลบุคคลภายนอก", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_external)
+    btn_save_ext.pack(pady=20)
+    
     # ==========================================
     # TAB 2: ตั้งค่าอีเมลผู้ดูแลระบบ (admin)
     # ==========================================
@@ -249,68 +311,6 @@ def open_edit_window(parent):
 
     btn_save_conn = tk.Button(conn_center_frame, text="บันทึกการตั้งค่า BLE", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_connect_data)
     btn_save_conn.pack(pady=20, padx=50)
-
-    # อย่าลืม import add_external_person ใน gui.py จาก db_manager
-    # ==========================================
-    # TAB 4: เพิ่มบุคคลภายนอก (External Person)
-    # ==========================================
-    tab_external = tk.Frame(notebook, bg="#34495e")
-    notebook.add(tab_external, text=" เพิ่มบุคคลภายนอก ")
-
-    ext_center_frame = tk.Frame(tab_external, bg="#34495e")
-    ext_center_frame.pack(expand=True, fill=tk.BOTH, pady=20)
-
-    var_ext_prefix = tk.StringVar()
-    var_ext_fname = tk.StringVar()
-    var_ext_lname = tk.StringVar()
-    var_ext_email = tk.StringVar()
-
-    form_ext = tk.Frame(ext_center_frame, bg="#34495e")
-    form_ext.pack(pady=10)
-
-    ext_fields = [
-        ("คำนำหน้า:", var_ext_prefix),
-        ("ชื่อ:", var_ext_fname),
-        ("นามสกุล:", var_ext_lname),
-        ("อีเมล:", var_ext_email)
-    ]
-
-    for i, (label_text, var) in enumerate(ext_fields):
-        tk.Label(form_ext, text=label_text, bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=i, column=0, sticky="e", pady=8, padx=10)
-        tk.Entry(form_ext, textvariable=var, font=("Arial", 12), width=35).grid(row=i, column=1, pady=8, padx=10)
-
-    def save_external():
-        prefix = var_ext_prefix.get().strip()
-        fname = var_ext_fname.get().strip()
-        lname = var_ext_lname.get().strip()
-        email = var_ext_email.get().strip()
-
-        if not fname:
-            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกชื่อผู้ใช้งานภายนอก")
-            return
-
-        btn_save_ext.config(state="disabled", text="กำลังบันทึก...")
-
-        def save_task():
-            success, result_id = add_external_person(prefix, fname, lname, email)
-            
-            def update_ui():
-                btn_save_ext.config(state="normal", text="บันทึกข้อมูลบุคคลภายนอก")
-                if success:
-                    messagebox.showinfo("สำเร็จ", f"บันทึกสำเร็จ! รหัสผู้ใช้งานภายนอกคือ: {result_id}")
-                    var_ext_prefix.set("")
-                    var_ext_fname.set("")
-                    var_ext_lname.set("")
-                    var_ext_email.set("")
-                else:
-                    messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถบันทึกได้: {result_id}")
-
-            edit_win.after(0, update_ui)
-
-        threading.Thread(target=save_task, daemon=True).start()
-
-    btn_save_ext = tk.Button(ext_center_frame, text="บันทึกข้อมูลบุคคลภายนอก", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_external)
-    btn_save_ext.pack(pady=20)
 
     # ==========================================
     # ระบบ Asynchronous โหลดข้อมูลเมื่อเปิดหน้าต่าง
