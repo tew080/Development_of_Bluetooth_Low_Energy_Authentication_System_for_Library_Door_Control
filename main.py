@@ -2,6 +2,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from google.cloud.firestore_v1.base_query import FieldFilter
+
 import shared_state
 from ble_scanner import run_background_scanner
 from dashboard import show_dashboard_graph
@@ -67,27 +69,27 @@ def open_edit_window(parent):
     notebook = ttk.Notebook(main_container)
     notebook.pack(fill=tk.BOTH, expand=True)
 
-    # ==========================================
+# ==========================================
     # TAB 1: จัดการข้อมูลนักศึกษา (student)
     # ==========================================
     tab_student = tk.Frame(notebook, bg="#34495e")
     notebook.add(tab_student, text="ข้อมูลนักศึกษา ")
 
-    # Frame สำหรับการค้นหา จัดให้อยู่ตรงกลาง
     st_center_frame = tk.Frame(tab_student, bg="#34495e")
     st_center_frame.pack(expand=True, fill=tk.BOTH, pady=20)
 
     search_frame = tk.Frame(st_center_frame, bg="#34495e")
     search_frame.pack(pady=(10, 15))
 
-    tk.Label(search_frame, text="ค้นหารหัส นศ.:", bg="#34495e", font=("Arial", 13, "bold"), fg="white").grid(row=0, column=0, padx=5)
-    entry_search = tk.Entry(search_frame, font=("Arial", 13), width=20)
+    # ปรับข้อความ Label ให้ครอบคลุมการค้นหา
+    tk.Label(search_frame, text="ค้นหารหัส / ชื่อ-สกุล:", bg="#34495e", font=("Arial", 13, "bold"), fg="white").grid(row=0, column=0, padx=5)
+    entry_search = tk.Entry(search_frame, font=("Arial", 13), width=25)
     entry_search.grid(row=0, column=1, padx=5)
 
+    tk.Label(search_frame, text="* กรณีค้นหาด้วยชื่อ ให้พิมพ์: ชื่อ เว้นวรรค นามสกุล", bg="#34495e", font=("Arial", 10), fg="#bdc3c7").grid(row=1, column=0, columnspan=3, pady=(5, 0))
     form_st = tk.Frame(st_center_frame, bg="#34495e")
     form_st.pack(pady=10)
 
-    # ตัวแปรสำหรับรับค่าในฟอร์มของนักศึกษา
     var_prefix, var_fname, var_lname = tk.StringVar(), tk.StringVar(), tk.StringVar()
     var_email, var_faculty, var_branch, var_key = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
 
@@ -98,25 +100,58 @@ def open_edit_window(parent):
         tk.Label(form_st, text=text+":", bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=i, column=0, sticky="e", pady=6, padx=10)
         tk.Entry(form_st, textvariable=var, font=("Arial", 12), width=35).grid(row=i, column=1, pady=6, padx=10)
 
-# นำโค้ด 2 ฟังก์ชันนี้ไปแทนที่ฟังก์ชัน search_student และ save_student อันเดิมใน gui.py 
-    # ตำแหน่งจะอยู่ในบล็อก TAB 1: จัดการข้อมูลนักศึกษา ของฟังก์ชัน open_edit_window
+    # ตัวแปรเก็บ ID เป้าหมายชั่วคราว ป้องกันการเซฟทับชื่อ
+    current_target_id = {"id": None}
 
     def search_student():
-        """ฟังก์ชันค้นหาข้อมูลนักศึกษาจากฐานข้อมูล (ทำงานผ่าน Background Thread ป้องกันจอค้าง)"""
-        sid = entry_search.get().strip()
-        if not sid:
-            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกรหัสนักศึกษา")
+        """ฟังก์ชันค้นหาข้อมูลนักศึกษาจากฐานข้อมูล (รองรับ ID และ ชื่อ-สกุล)"""
+        query_text = entry_search.get().strip()
+        if not query_text:
+            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกรหัสนักศึกษา หรือ ชื่อ-สกุล")
             return
         
         btn_search.config(state="disabled", text="กำลังค้นหา...")
 
         def fetch_data_task():
-            # ดึงข้อมูลจากฐานข้อมูลใน Thread 분리
-            data = get_student_by_id(sid)
+            data = None
+            target_id = query_text
+            
+            # 1. ลองค้นหาด้วย ID ก่อน (ฟังก์ชันเดิมของคุณ)
+            try:
+                data = get_student_by_id(query_text)
+            except Exception as e:
+                pass
+            
+            # 2. ถ้าไม่พบข้อมูล ลองค้นหาจาก ชื่อ หรือ ชื่อ-สกุล ใน Firestore
+            if not data and shared_state.db is not None:
+                parts = query_text.split()
+                students_ref = shared_state.db.collection(Config.COLLECTION_STUDENT)
+                
+                try:
+                    if len(parts) >= 2:
+                        # ค้นหาด้วย ชื่อ และ นามสกุล
+                        docs = students_ref.where(filter=FieldFilter("first_name", "==", parts[0]))\
+                                           .where(filter=FieldFilter("last_name", "==", " ".join(parts[1:]))).stream()
+                    else:
+                        # ค้นหาด้วย ชื่อ อย่างเดียว
+                        docs = students_ref.where(filter=FieldFilter("first_name", "==", query_text)).stream()
+                    
+                    for doc in docs:
+                        data = doc.to_dict()
+                        target_id = doc.id  # เก็บ Document ID / Student ID ที่พบ
+                        break # ดึงข้อมูลรายการแรกที่ตรงกัน
+                except Exception as e:
+                    print(f"Error querying by name: {e}")
             
             def update_ui():
                 btn_search.config(state="normal", text="ค้นหา")
                 if data:
+                    current_target_id["id"] = target_id
+                    
+                    # ปรับข้อความในช่องค้นหาให้กลายเป็น ID เพื่อให้ปุ่มบันทึกทำงานได้ถูกต้อง
+                    entry_search.delete(0, tk.END)
+                    entry_search.insert(0, target_id)
+                    
                     var_prefix.set(data.get("prefix", ""))
                     var_fname.set(data.get("first_name", ""))
                     var_lname.set(data.get("last_name", ""))
@@ -124,14 +159,14 @@ def open_edit_window(parent):
                     var_faculty.set(data.get("faculty", ""))
                     var_branch.set(data.get("branch", ""))
                     var_key.set(data.get(Config.FIELD_NAME, ""))
-                    btn_save_ext.config(state="normal", bg="#27ae60", cursor="hand2")
-                    messagebox.showinfo("สำเร็จ", f"พบข้อมูลรหัส นศ. {sid}")
+                    
+                    btn_save_st.config(state="normal", bg="#27ae60", cursor="hand2")
+                    messagebox.showinfo("สำเร็จ", f"พบข้อมูล: {data.get('first_name')} {data.get('last_name')}")
                 else:
-                    messagebox.showinfo("ไม่พบข้อมูล", f"ไม่พบข้อมูลรหัส นศ. {sid} ในระบบ")
+                    messagebox.showinfo("ไม่พบข้อมูล", f"ไม่พบข้อมูล '{query_text}' ในระบบ")
                     for v in st_vars: v.set("")
-                    btn_save_st.config(state="disabled", bg="#95a5a6", cursor="arrow")
+                    #btn_save_st.config(state="disabled", cursor="arrow")
             
-            # อัปเดต GUI ใน Main Thread
             edit_win.after(0, update_ui)
 
         threading.Thread(target=fetch_data_task, daemon=True).start()
@@ -140,8 +175,9 @@ def open_edit_window(parent):
     btn_search.grid(row=0, column=2, padx=10)
 
     def save_student():
-        """ฟังก์ชันบันทึกข้อมูลนักศึกษากลับไปยัง Firebase (ทำงาน Background)"""
-        sid = entry_search.get().strip()
+        """ฟังก์ชันบันทึกข้อมูลนักศึกษากลับไปยัง Firebase"""
+        # ใช้ ID จากที่ระบบดึงมาได้ (ป้องกันบั๊กกรณีช่องค้นหาเป็นชื่อ)
+        sid = current_target_id["id"] or entry_search.get().strip()
         if not sid: return
         
         btn_save_st.config(state="disabled", text="กำลังบันทึก...")
@@ -169,7 +205,9 @@ def open_edit_window(parent):
 
         threading.Thread(target=save_data_task, daemon=True).start()
 
-        # อย่าลืม import add_external_person ใน gui.py จาก db_manager
+    btn_save_st = tk.Button(st_center_frame, text="บันทึกการแก้ไขข้อมูลนักศึกษา", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", cursor="hand2", command=save_student)
+    btn_save_st.pack(pady=10)
+
     # ==========================================
     # TAB 4: เพิ่มบุคคลภายนอก (External Person)
     # ==========================================
@@ -278,7 +316,7 @@ def open_edit_window(parent):
     btn_save_adm = tk.Button(adm_center_frame, text="บันทึกการตั้งค่า Admin", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_admin_data)
     btn_save_adm.pack(pady=20, padx=50)
 
-    # ==========================================
+    """# ==========================================
     # TAB 3: ตั้งค่าการเชื่อมต่อ BLE (connect)
     # ==========================================
     tab_connect = tk.Frame(notebook, bg="#34495e")
@@ -300,7 +338,7 @@ def open_edit_window(parent):
     tk.Entry(form_conn, textvariable=var_uuid, font=("Arial", 13), width=35).grid(row=1, column=1, pady=15, padx=10)
 
     def save_connect_data():
-        """ฟังก์ชันบันทึกการตั้งค่า BLE Config กลับไปยัง Firebase"""
+        #ฟังก์ชันบันทึกการตั้งค่า BLE Config กลับไปยัง Firebase
         if update_ble_connect_config(var_comp_id.get(), var_uuid.get()):
             messagebox.showinfo("สำเร็จ", "อัปเดตข้อมูล connect (BLE) เรียบร้อยแล้ว")
         else:
@@ -342,7 +380,7 @@ def open_edit_window(parent):
         edit_win.after(0, update_gui)
 
     # สั่งให้ทำงานใน Thread แยกต่างหากทันที
-    threading.Thread(target=load_data_background, daemon=True).start()
+    threading.Thread(target=load_data_background, daemon=True).start()"""
 
 
 def open_admin_window(root):
