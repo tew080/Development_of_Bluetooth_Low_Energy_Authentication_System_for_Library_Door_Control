@@ -221,7 +221,7 @@ def open_edit_window(parent):
     var_ext_fname = tk.StringVar()
     var_ext_lname = tk.StringVar()
     var_ext_email = tk.StringVar()
-
+    
     form_ext = tk.Frame(ext_center_frame, bg="#34495e")
     form_ext.pack(pady=10)
 
@@ -349,7 +349,7 @@ def open_edit_window(parent):
 
     btn_save_conn = tk.Button(conn_center_frame, text="บันทึกการตั้งค่า BLE", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_connect_data)
     btn_save_conn.pack(pady=20, padx=50)
-
+    
     # ==========================================
     # ระบบ Asynchronous โหลดข้อมูลเมื่อเปิดหน้าต่าง
     # ป้องกันไม่ให้โปรแกรมค้างระหว่างรอ Firebase
@@ -382,6 +382,28 @@ def open_edit_window(parent):
     # สั่งให้ทำงานใน Thread แยกต่างหากทันที
     threading.Thread(target=load_data_background, daemon=True).start()"""
 
+    # ==========================================
+    # ระบบ Asynchronous โหลดข้อมูลเมื่อเปิดหน้าต่าง
+    # ป้องกันไม่ให้โปรแกรมค้างระหว่างรอ Firebase
+    # ==========================================
+    def load_data_background():
+        # ดึงข้อมูลจากฐานข้อมูลเบื้องหลัง
+        admin_data = get_admin_email_config()
+
+        def update_gui():
+            # อัปเดตข้อมูลในหน้า Admin Tab
+            if admin_data:
+                var_adm_email.set(admin_data.get("email", ""))
+                var_adm_pass.set(admin_data.get("emailAppPassword", ""))
+                lbl_adm_status.config(text="✓ ดึงข้อมูลล่าสุดสำเร็จ", fg="#2ecc71")
+            else:
+                lbl_adm_status.config(text="❌ ไม่พบข้อมูลการตั้งค่า Admin", fg="#e74c3c")
+        
+        # ส่งคำสั่งไปรันอัปเดต GUI ใน Main Thread
+        edit_win.after(0, update_gui)
+
+    # สั่งให้ทำงานใน Thread แยกต่างหากทันที
+    threading.Thread(target=load_data_background, daemon=True).start()
 
 def open_admin_window(root):
     """
@@ -389,7 +411,7 @@ def open_admin_window(root):
     สำหรับเลือกเข้าถึงฟังก์ชันต่างๆ เช่น ดูแดชบอร์ด, นำเข้าข้อมูล CSV และการตั้งค่าระบบ
     """
     admin_window = tk.Toplevel(root)
-    admin_window.title("ระบบผู้ดูแลระบบ (Admin Menu) - กด F11 เพื่อเต็มจอ")
+    admin_window.title("ตั้งค่าระบบ / จัดการข้อมูล - กด F11 เพื่อเต็มจอ")
     admin_window.geometry("800x650")
     admin_window.configure(bg="#34495e")
     admin_window.resizable(True, True)
@@ -400,7 +422,7 @@ def open_admin_window(root):
     center_frame.pack(expand=True)
 
     lbl_admin = tk.Label(
-        center_frame, text="เมนูผู้ดูแลระบบ", font=("Arial", 36, "bold"), fg="white", bg="#34495e"
+        center_frame, text="ตั้งค่าระบบ / จัดการข้อมูล", font=("Arial", 36, "bold"), fg="white", bg="#34495e"
     )
     lbl_admin.pack(pady=(10, 30))
 
@@ -506,7 +528,7 @@ def setup_gui():
     # ปุ่มกดเข้าสู่เมนูจัดการของผู้ดูแลระบบ (Admin)
     btn_admin_menu = tk.Button(
         main_frame,
-        text="ตั้งค่าระบบ / จัดการข้อมูล (Admin Menu)",
+        text="ตั้งค่าระบบ / จัดการข้อมูล",
         font=("Arial", 16, "bold"),
         bg="#7f8c8d",
         fg="white",

@@ -15,57 +15,75 @@ _last_fetch_timestamp = None
 CACHE_EXPIRATION_MINUTES = 10  # ป้องกันการอ่าน Firestore บ่อยเกินไป (อ่านสูงสุดไม่เกิน 1 ครั้งทุกๆ 10 นาที)
 
 def update_dashboard_data_file(new_event=None, force_refresh=False):
-    """
-    อัปเดตไฟล์ JS แดชบอร์ดแบบประหยัด Firestore Read Limit
-    - หากมี new_event เข้ามา จะ append เข้า local cache ทันที โดยใช้ 0 Firestore Reads!
-    - ดึงข้อมูลจาก Firestore เฉพาะครั้งแรก หรือเมื่อแคชหมดอายุ (10 นาที)
-    """
     global _raw_events_cache, _last_fetch_timestamp
-    if shared_state.db is None and not _raw_events_cache:
-        return
+    
+    os.makedirs(Config.CACHE_DIR, exist_ok=True)
+    cache_path = Config.LOGS_CACHE_FILE
 
     with shared_state.dashboard_data_lock:
         try:
             today_date = datetime.now().strftime("%Y-%m-%d")
-            past_date_limit = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+            
+            # โหลดแคชเดิมจากไฟล์
+            if not _raw_events_cache and os.path.exists(cache_path):
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    _raw_events_cache = json.load(f)
 
-            now_ts = datetime.now()
-            needs_db_fetch = force_refresh or (_last_fetch_timestamp is None) or \
-                             ((now_ts - _last_fetch_timestamp).total_seconds() > CACHE_EXPIRATION_MINUTES * 60)
-
-            # --- 1. บริหารจัดการ Local Events Cache ---
-            if new_event is not None and _raw_events_cache:
-                # มีสแกนใหม่ -> เพิ่มเข้า Local Cache โดยตรง (0 Firestore Reads!)
+            # อัปเดตแคชเมื่อมี Event ใหม่ทันที (ประหยัดโควต้า)
+            if new_event is not None:
                 _raw_events_cache.append(new_event)
-            elif needs_db_fetch and shared_state.db is not None:
-                # ดึงจาก Firestore เฉพาะช่วงเวลาที่กำหนด
-                logs_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE)\
-                    .where(filter=FieldFilter("date", ">=", past_date_limit))\
-                    .stream()
+                with open(cache_path, 'w', encoding='utf-8') as f:
+                    json.dump(_raw_events_cache, f, ensure_ascii=False)
+            
+            # ดึงเฉพาะข้อมูลที่เปลี่ยนไป/เพิ่งเพิ่มเข้ามา (Delta Sync)
+            elif shared_state.db is not None:
+                now_ts = datetime.now()
+                needs_db_fetch = force_refresh or (_last_fetch_timestamp is None) or \
+                                 ((now_ts - _last_fetch_timestamp).total_seconds() > CACHE_EXPIRATION_MINUTES * 60)
                 
-                fetched_events = []
-                for doc in logs_ref:
-                    d = doc.to_dict()
-                    s_id = d.get("student_id", "")
-                    if not s_id:
-                        continue
+                if needs_db_fetch:
+                    # หาค่าวันที่ล่าสุดในแคชเพื่อดึงเฉพาะข้อมูลใหม่
+                    latest_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+                    if _raw_events_cache:
+                        latest_date = max([ev.get("date", "") for ev in _raw_events_cache] + [latest_date])
 
-                    # Lookup จาก memory valid_keys
-                    student_info = next((v for v in shared_state.valid_keys.values() if v.get("doc_id") == s_id or v.get("student_id") == s_id), {})
+                    logs_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE)\
+                        .where(filter=FieldFilter("date", ">=", latest_date))\
+                        .stream()
+                    
+                    new_fetched = []
+                    existing_doc_ids = {f"{e.get('date')}_{e.get('time').replace(':', '')}_{e.get('student_id')}" for e in _raw_events_cache}
 
-                    fetched_events.append({
-                        "student_id": s_id,
-                        "first_name": d.get("first_name") or student_info.get("first_name", "ไม่ระบุ"),
-                        "last_name": d.get("last_name") or student_info.get("last_name", ""),
-                        "action": d.get("action", ""),
-                        "date": d.get("date", ""),
-                        "time": d.get("time", "00:00:00"),
-                        "faculty": d.get("faculty") or student_info.get("faculty", "ไม่ระบุ"),
-                        "branch": d.get("branch") or student_info.get("branch", "ไม่ระบุ")
-                    })
-                _raw_events_cache = fetched_events
-                _last_fetch_timestamp = now_ts
-                log(f"⚡ [Cache Updated] Loaded {len(_raw_events_cache)} logs from Firestore.")
+                    for doc in logs_ref:
+                        d = doc.to_dict()
+                        s_id = d.get("student_id", "")
+                        d_time = d.get("time", "00:00:00")
+                        d_date = d.get("date", "")
+                        
+                        doc_hash = f"{d_date}_{d_time.replace(':', '')}_{s_id}"
+                        if not s_id or doc_hash in existing_doc_ids:
+                            continue
+
+                        student_info = next((v for v in shared_state.valid_keys.values() if v.get("doc_id") == s_id or v.get("student_id") == s_id), {})
+                        
+                        new_fetched.append({
+                            "student_id": s_id,
+                            "first_name": d.get("first_name") or student_info.get("first_name", "ไม่ระบุ"),
+                            "last_name": d.get("last_name") or student_info.get("last_name", ""),
+                            "action": d.get("action", ""),
+                            "date": d_date,
+                            "time": d_time,
+                            "faculty": d.get("faculty") or student_info.get("faculty", "ไม่ระบุ"),
+                            "branch": d.get("branch") or student_info.get("branch", "ไม่ระบุ")
+                        })
+                    
+                    if new_fetched:
+                        _raw_events_cache.extend(new_fetched)
+                        with open(cache_path, 'w', encoding='utf-8') as f:
+                            json.dump(_raw_events_cache, f, ensure_ascii=False)
+                        log(f"⚡ [Cache Updated] Fetched {len(new_fetched)} new logs (Delta) and saved to file.")
+                    
+                    _last_fetch_timestamp = now_ts
 
             # --- 2. แปลงข้อมูลเป็น raw_events และ all_logs ---
             raw_events = _raw_events_cache

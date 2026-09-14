@@ -64399,3 +64399,362 @@ RuntimeError: cannot schedule new futures after interpreter shutdown
 [2026-08-31 20:44:18] - แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ
 [2026-08-31 20:44:19] - Listening for signals...
 [2026-08-31 20:44:19] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-01 11:22:11] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-01 11:22:13] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-01 11:22:13] - Firebase Connected & Syncing...
+[2026-09-01 11:22:14] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-01 11:22:15] - Listening for signals...
+[2026-09-01 11:22:19] - กำลังเตรียมแดชบอร์ดสถิติระดับพรีเมียม...
+[2026-09-01 11:22:21] ⚡ [Cache Updated] Loaded 6135 logs from Firestore.
+[2026-09-01 11:22:22] - แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ
+[2026-09-01 12:01:39] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-01 12:01:40] ❌ Fetch Config Error: 429 Quota exceeded.
+[2026-09-01 12:01:40] - Firebase Connected & Syncing...
+[2026-09-01 12:01:42] - Listening for signals...
+[2026-09-01 12:01:46] ❌ Error fetching admin email config: 429 Quota exceeded.
+[2026-09-01 12:01:46] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-01 12:01:47] ❌ Error fetching BLE connect config: 429 Quota exceeded.
+[2026-09-01 12:04:34] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-01 12:04:39] ❌ Fetch Config Error: 429 Quota exceeded.
+[2026-09-01 12:04:39] - Firebase Connected & Syncing...
+[2026-09-01 12:04:39] ❌ Error fetching admin email config: 429 Quota exceeded.
+[2026-09-01 12:04:39] ❌ Error fetching BLE connect config: 429 Quota exceeded.
+[2026-09-01 12:04:41] - Listening for signals...
+[2026-09-01 12:04:42] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:42:16] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-03 10:42:17] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-03 10:42:17] - Firebase Connected & Syncing...
+[2026-09-03 10:42:18] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:42:19] - Listening for signals...
+[2026-09-03 10:42:50] - กำลังเตรียมแดชบอร์ดสถิติระดับพรีเมียม...
+[2026-09-03 10:42:51] ⚡ [Cache Updated] Loaded 6135 logs from Firestore.
+[2026-09-03 10:42:51] - แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ
+[2026-09-03 10:45:28] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:37] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:51] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:51] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:51] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:51] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:52.905] ==================================================
+[2026-09-03 10:46:52.906] RECEIVED ADVERTISEMENT PACKET
+[2026-09-03 10:46:52.906] ==================================================
+[2026-09-03 10:46:52.906] Device Address  : 4E:2E:CA:DB:4E:C9
+[2026-09-03 10:46:52.906] Device Name     : 4E-2E-CA-DB-4E-C9
+[2026-09-03 10:46:52.907] RSSI            : -60 dBm
+[2026-09-03 10:46:52.907] Manufacturer Data: [ID: 0xFFFF] [Hex: 0xc907cd8b] [Hex: b'\xc9\x07\xcd\x8b'] 
+[2026-09-03 10:46:52.907] --------------------------------------------------
+[2026-09-03 10:46:53] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 10:46:53] - Firebase Updated: [Clock-IN] User: ep0001 (checkinoutStatus: True)
+[2026-09-03 10:46:53] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:20:37] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-03 11:20:38] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-03 11:20:38] - Firebase Connected & Syncing...
+[2026-09-03 11:20:39] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:20:41] - Listening for signals...
+[2026-09-03 11:21:36] - เพิ่มข้อมูลบุคคลภายนอกสำเร็จ ID: ep0003
+[2026-09-03 11:21:36] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:23:15] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:24:40] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:25:00] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:25:00] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:25:00] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:25:00] - Database Sync: Updated memory (Delta Sync). Total active keys: 4
+[2026-09-03 11:25:00] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-03 11:25:00.901] ==================================================
+[2026-09-03 11:25:00.902] RECEIVED ADVERTISEMENT PACKET
+[2026-09-03 11:25:00.902] ==================================================
+[2026-09-03 11:25:00.902] Device Address  : 5F:A2:75:C3:DC:D9
+[2026-09-03 11:25:00.903] Device Name     : 5F-A2-75-C3-DC-D9
+[2026-09-03 11:25:00.903] RSSI            : -54 dBm
+[2026-09-03 11:25:00.903] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x085d3397] [Hex: b'\x08]3\x97'] 
+[2026-09-03 11:25:00.903] --------------------------------------------------
+[2026-09-03 11:25:01] - Firebase Updated: [Clock-IN] User: ep0003 (checkinoutStatus: True)
+[2026-09-03 11:25:01] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-03 11:25:01] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-03 11:25:03] ⚡ [Cache Updated] Loaded 6137 logs from Firestore.
+[2026-09-10 11:13:25] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:13:27] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:13:27] - Firebase Connected & Syncing...
+[2026-09-10 11:13:28] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:13:29] - Listening for signals...
+[2026-09-10 11:17:08] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:17:09] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:17:09] - Firebase Connected & Syncing...
+[2026-09-10 11:17:10] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:17:11] - Listening for signals...
+[2026-09-10 11:18:10] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:18:12] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:18:12] - Firebase Connected & Syncing...
+[2026-09-10 11:18:13] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:18:14] - Listening for signals...
+[2026-09-10 11:22:10] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:22:13] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:22:13] - Firebase Connected & Syncing...
+[2026-09-10 11:22:15] - Listening for signals...
+[2026-09-10 11:22:17] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:23:10] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:23:12] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:23:12] - Firebase Connected & Syncing...
+[2026-09-10 11:23:14] - Listening for signals...
+[2026-09-10 11:23:15] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:23:37] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:23:39] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:23:39] - Firebase Connected & Syncing...
+[2026-09-10 11:23:41] - Listening for signals...
+[2026-09-10 11:24:06] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:24:08] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:24:08] - Firebase Connected & Syncing...
+[2026-09-10 11:24:10] - Listening for signals...
+[2026-09-10 11:24:20] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:24:21] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:24:21] - Firebase Connected & Syncing...
+[2026-09-10 11:24:23] - Listening for signals...
+[2026-09-10 11:24:32] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:24:32] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:24:32] - Firebase Connected & Syncing...
+[2026-09-10 11:24:33] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:24:34] - Listening for signals...
+[2026-09-10 11:24:40] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:24:41] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:24:41] - Firebase Connected & Syncing...
+[2026-09-10 11:24:43] - Listening for signals...
+[2026-09-10 11:24:43] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:25:13] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:25:15] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:25:15] - Firebase Connected & Syncing...
+[2026-09-10 11:25:17] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:25:17] - Listening for signals...
+[2026-09-10 11:25:58] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:25:59] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:25:59] - Firebase Connected & Syncing...
+[2026-09-10 11:26:01] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:26:01] - Listening for signals...
+[2026-09-10 11:26:11] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:26:12] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:26:12] - Firebase Connected & Syncing...
+[2026-09-10 11:26:13] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:26:14] - Listening for signals...
+[2026-09-10 11:26:21] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:26:23] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:26:23] - Firebase Connected & Syncing...
+[2026-09-10 11:26:24] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:26:25] - Listening for signals...
+[2026-09-10 11:27:09] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:27:10] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:27:10] - Firebase Connected & Syncing...
+[2026-09-10 11:27:12] - Listening for signals...
+[2026-09-10 11:27:12] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:27:23] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:27:25] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:27:25] - Firebase Connected & Syncing...
+[2026-09-10 11:27:26] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:27:27] - Listening for signals...
+[2026-09-10 11:28:53] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:28:54] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:28:54] - Firebase Connected & Syncing...
+[2026-09-10 11:28:55] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:28:56] - Listening for signals...
+[2026-09-10 11:29:23] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:29:24] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:29:24] - Firebase Connected & Syncing...
+[2026-09-10 11:29:25] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:29:26] - Listening for signals...
+[2026-09-10 11:30:03] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:30:04] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:30:04] - Firebase Connected & Syncing...
+[2026-09-10 11:30:05] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:30:06] - Listening for signals...
+[2026-09-10 11:30:31] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:30:31] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:30:31] - Firebase Connected & Syncing...
+[2026-09-10 11:30:32] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:30:33] - Listening for signals...
+[2026-09-10 11:33:11] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:33:12] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:33:12] - Firebase Connected & Syncing...
+[2026-09-10 11:33:13] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:33:14] - Listening for signals...
+[2026-09-10 11:33:40] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:33:42] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:33:42] - Firebase Connected & Syncing...
+[2026-09-10 11:33:42] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:33:44] - Listening for signals...
+[2026-09-10 11:34:43] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:34:44] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:34:44] - Firebase Connected & Syncing...
+[2026-09-10 11:34:45] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:34:46] - Listening for signals...
+[2026-09-10 11:35:30] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:35:32] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:35:32] - Firebase Connected & Syncing...
+[2026-09-10 11:35:33] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:35:34] - Listening for signals...
+[2026-09-10 11:36:56] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:36:57] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 11:36:57] - Firebase Connected & Syncing...
+[2026-09-10 11:36:58] ❌ Error fetching admin email config: 429 Quota exceeded.
+[2026-09-10 11:36:58] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:36:58] ❌ Error fetching BLE connect config: 429 Quota exceeded.
+[2026-09-10 11:36:59] - Listening for signals...
+[2026-09-10 11:37:07] - Successfully updated student ID: 6604341001105
+[2026-09-10 11:38:35] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:38:36] ❌ Fetch Config Error: 429 Quota exceeded.
+[2026-09-10 11:38:36] - Firebase Connected & Syncing...
+[2026-09-10 11:38:37] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:38:38] - Listening for signals...
+[2026-09-10 11:38:39] ❌ Error fetching BLE connect config: 429 Quota exceeded.
+[2026-09-10 11:39:34] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 11:39:34] ❌ Fetch Config Error: 429 Quota exceeded.
+[2026-09-10 11:39:34] - Firebase Connected & Syncing...
+[2026-09-10 11:39:35] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 11:39:37] - Listening for signals...
+[2026-09-10 12:04:33] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-10 12:04:34] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-10 12:04:34] - Firebase Connected & Syncing...
+[2026-09-10 12:04:35] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-10 12:04:36] - Listening for signals...
+[2026-09-10 12:05:58] - Database Sync: Updated memory (Delta Sync). Total active keys: 5
+[2026-09-11 12:18:06] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:18:06] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:18:06] - Firebase Connected & Syncing...
+[2026-09-11 12:18:07] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:18:09] - Listening for signals...
+[2026-09-11 12:18:16] - กำลังเตรียมแดชบอร์ดสถิติระดับพรีเมียม...
+[2026-09-11 12:18:17] ⚡ [Cache Updated] Fetched 6137 new logs (Delta) and saved to file.
+[2026-09-11 12:18:17] - แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ
+[2026-09-11 12:20:24] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:47.816] ==================================================
+[2026-09-11 12:20:47.816] RECEIVED ADVERTISEMENT PACKET
+[2026-09-11 12:20:47.816] ==================================================
+[2026-09-11 12:20:47.817] Device Address  : 44:CE:30:15:5A:81
+[2026-09-11 12:20:47.817] Device Name     : 44-CE-30-15-5A-81
+[2026-09-11 12:20:47.817] RSSI            : -54 dBm
+[2026-09-11 12:20:47.817] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x25170e04] [Hex: b'%\x17\x0e\x04'] 
+[2026-09-11 12:20:47.817] --------------------------------------------------
+[2026-09-11 12:20:48] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:20:48] - Firebase Updated: [Clock-IN] User: 6604341001105 (checkinoutStatus: True)
+[2026-09-11 12:20:48] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:21:17.180] ==================================================
+[2026-09-11 12:21:17.180] RECEIVED ADVERTISEMENT PACKET
+[2026-09-11 12:21:17.181] ==================================================
+[2026-09-11 12:21:17.181] Device Address  : 6F:9B:A6:A0:12:6D
+[2026-09-11 12:21:17.181] Device Name     : 6F-9B-A6-A0-12-6D
+[2026-09-11 12:21:17.181] RSSI            : -54 dBm
+[2026-09-11 12:21:17.181] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x25170e04] [Hex: b'%\x17\x0e\x04'] 
+[2026-09-11 12:21:17.181] --------------------------------------------------
+[2026-09-11 12:21:17] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:21:17] - Firebase Updated: [Clock-OUT] User: 6604341001105 (checkinoutStatus: True)
+[2026-09-11 12:21:17] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:21:52.430] ==================================================
+[2026-09-11 12:21:52.431] RECEIVED ADVERTISEMENT PACKET
+[2026-09-11 12:21:52.431] ==================================================
+[2026-09-11 12:21:52.431] Device Address  : 6C:0A:88:D2:6B:1A
+[2026-09-11 12:21:52.431] Device Name     : 6C-0A-88-D2-6B-1A
+[2026-09-11 12:21:52.432] RSSI            : -60 dBm
+[2026-09-11 12:21:52.432] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x25170e04] [Hex: b'%\x17\x0e\x04'] 
+[2026-09-11 12:21:52.432] --------------------------------------------------
+[2026-09-11 12:21:52] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:21:52] - Firebase Updated: [Clock-IN] User: 6604341001105 (checkinoutStatus: True)
+[2026-09-11 12:21:52] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:22:39.703] ==================================================
+[2026-09-11 12:22:39.703] RECEIVED ADVERTISEMENT PACKET
+[2026-09-11 12:22:39.703] ==================================================
+[2026-09-11 12:22:39.703] Device Address  : 6B:E1:DA:D4:AF:1E
+[2026-09-11 12:22:39.703] Device Name     : 6B-E1-DA-D4-AF-1E
+[2026-09-11 12:22:39.703] RSSI            : -52 dBm
+[2026-09-11 12:22:39.704] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x25170e04] [Hex: b'%\x17\x0e\x04'] 
+[2026-09-11 12:22:39.704] --------------------------------------------------
+[2026-09-11 12:22:39] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:22:39] - Firebase Updated: [Clock-OUT] User: 6604341001105 (checkinoutStatus: True)
+[2026-09-11 12:22:40] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:22:46.481] ==================================================
+[2026-09-11 12:22:46.482] RECEIVED ADVERTISEMENT PACKET
+[2026-09-11 12:22:46.482] ==================================================
+[2026-09-11 12:22:46.482] Device Address  : 45:1C:46:36:E1:FB
+[2026-09-11 12:22:46.482] Device Name     : 45-1C-46-36-E1-FB
+[2026-09-11 12:22:46.482] RSSI            : -52 dBm
+[2026-09-11 12:22:46.482] Manufacturer Data: [ID: 0xFFFF] [Hex: 0x25170e04] [Hex: b'%\x17\x0e\x04'] 
+[2026-09-11 12:22:46.482] --------------------------------------------------
+[2026-09-11 12:22:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:22:46] - Firebase Updated: [Clock-IN] User: 6604341001105 (checkinoutStatus: True)
+[2026-09-11 12:22:46] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:29:15] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:29:15] - Loaded 5 users from local cache.
+[2026-09-11 12:29:15] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:29:15] - Firebase Connected & Syncing...
+[2026-09-11 12:29:16] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:29:17] - Listening for signals...
+[2026-09-11 12:31:07] - เพิ่มข้อมูลบุคคลภายนอกสำเร็จ ID: ep0004
+[2026-09-11 12:31:07] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:39:37] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:39:37] - Loaded 5 users from local cache.
+[2026-09-11 12:39:37] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:39:37] - Firebase Connected & Syncing...
+[2026-09-11 12:39:38] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:39:39] - Listening for signals...
+[2026-09-11 12:40:24] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:40:24] - Loaded 5 users from local cache.
+[2026-09-11 12:40:25] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:40:25] - Firebase Connected & Syncing...
+[2026-09-11 12:40:26] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:40:27] - Listening for signals...
+[2026-09-11 12:44:29] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:44:29] - Loaded 5 users from local cache.
+[2026-09-11 12:44:30] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:44:30] - Firebase Connected & Syncing...
+[2026-09-11 12:44:30] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:44:32] - Listening for signals...
+[2026-09-11 12:45:33] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:45:33] - Loaded 5 users from local cache.
+[2026-09-11 12:45:34] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:45:34] - Firebase Connected & Syncing...
+[2026-09-11 12:45:35] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:45:36] - Listening for signals...
+[2026-09-11 12:47:17] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:47:17] - Loaded 5 users from local cache.
+[2026-09-11 12:47:17] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:47:17] - Firebase Connected & Syncing...
+[2026-09-11 12:47:18] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:47:19] - Listening for signals...
+[2026-09-11 12:47:59] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:47:59] - Loaded 5 users from local cache.
+[2026-09-11 12:47:59] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:47:59] - Firebase Connected & Syncing...
+[2026-09-11 12:48:00] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:48:01] - Listening for signals...
+[2026-09-11 12:50:43] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:50:43] - Loaded 5 users from local cache.
+[2026-09-11 12:50:44] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:50:44] - Firebase Connected & Syncing...
+[2026-09-11 12:50:45] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:50:46] - Listening for signals...
+[2026-09-11 12:54:14] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:54:14] - Loaded 5 users from local cache.
+[2026-09-11 12:54:14] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:54:14] - Firebase Connected & Syncing...
+[2026-09-11 12:54:15] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:54:17] - Listening for signals...
+[2026-09-11 12:55:29] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:55:29] - Loaded 5 users from local cache.
+[2026-09-11 12:55:30] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:55:30] - Firebase Connected & Syncing...
+[2026-09-11 12:55:31] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:55:32] - Listening for signals...
+[2026-09-11 12:58:27] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-11 12:58:27] - Loaded 5 users from local cache.
+[2026-09-11 12:58:28] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-11 12:58:28] - Firebase Connected & Syncing...
+[2026-09-11 12:58:28] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-11 12:58:30] - Listening for signals...
+[2026-09-14 11:36:01] - STARTING ACCESS CONTROL SYSTEM -
+[2026-09-14 11:36:01] - Loaded 5 users from local cache.
+[2026-09-14 11:36:03] - Config Loaded -> UUID: 0000feaa-0000-1000-8000-00805f9b34fb, CompanyID: 0xffff
+[2026-09-14 11:36:03] - Firebase Connected & Syncing...
+[2026-09-14 11:36:03] - Database Sync: Updated memory & cache. Total active keys: 5
+[2026-09-14 11:36:05] - Listening for signals...
+[2026-09-14 11:38:03] - กำลังเตรียมแดชบอร์ดสถิติระดับพรีเมียม...
+[2026-09-14 11:38:03] - แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ

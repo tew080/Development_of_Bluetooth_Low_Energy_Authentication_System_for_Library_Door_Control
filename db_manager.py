@@ -15,6 +15,8 @@ from config import Config
 from dashboard import update_dashboard_data_file
 from logger import log
 
+import os
+import json
 
 def init_firebase():
     try:
@@ -461,3 +463,88 @@ def add_external_person(prefix, first_name, last_name, email):
     except Exception as e:
         log(f"❌ เกิดข้อผิดพลาดในการเพิ่มบุคคลภายนอก: {e}")
         return False, str(e)
+
+def load_local_users_cache():
+    """โหลดข้อมูลผู้ใช้งานจากไฟล์แคชก่อนเชื่อมต่อฐานข้อมูล"""
+    os.makedirs(Config.CACHE_DIR, exist_ok=True)
+    if os.path.exists(Config.USERS_CACHE_FILE):
+        try:
+            with open(Config.USERS_CACHE_FILE, 'r', encoding='utf-8') as f:
+                shared_state.valid_keys = json.load(f)
+            log(f"- Loaded {len(shared_state.valid_keys)} users from local cache.")
+        except Exception as e:
+            log(f"❌ Error loading users cache: {e}")
+            shared_state.valid_keys = {}
+    else:
+        shared_state.valid_keys = {}
+
+def save_local_users_cache():
+    """บันทึกข้อมูลผู้ใช้งานล่าสุดลงไฟล์แคช"""
+    os.makedirs(Config.CACHE_DIR, exist_ok=True)
+    try:
+        with open(Config.USERS_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(shared_state.valid_keys, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        log(f"❌ Error saving users cache: {e}")
+
+def init_firebase():
+    try:
+        load_local_users_cache() # ดึงจากไฟล์แคชก่อน
+        if not firebase_admin._apps:
+            cred = fb_credentials.Certificate(Config.FB_KEY_PATH)
+            firebase_admin.initialize_app(cred)
+        shared_state.db = firestore.client()
+        fetch_ble_config()
+        shared_state.db.collection(Config.COLLECTION_STUDENT).on_snapshot(on_snapshot_update)
+        log("- Firebase Connected & Syncing...")
+    except Exception as e:
+        log(f"❌ Firebase Init Error: {e}")
+        exit(1)
+
+def on_snapshot_update(col_snapshot, changes, read_time):
+    try:
+        if getattr(shared_state, 'valid_keys', None) is None:
+            shared_state.valid_keys = {}
+            
+        has_changes = False
+
+        for change in changes:
+            doc = change.document
+            data = doc.to_dict()
+            key = str(data.get(Config.FIELD_NAME, "")).strip()
+
+            if change.type.name in ['ADDED', 'MODIFIED']:
+                keys_to_delete = [k for k, v in shared_state.valid_keys.items() if v.get("doc_id") == doc.id]
+                for k in keys_to_delete:
+                    del shared_state.valid_keys[k]
+
+                if key:
+                    shared_state.valid_keys[key] = {
+                        "doc_id": doc.id,
+                        "student_id": data.get("student_id", doc.id),
+                        "prefix": data.get("prefix", ""),
+                        "first_name": data.get("first_name", "ไม่ระบุ"),
+                        "last_name": data.get("last_name", ""),
+                        "faculty": data.get("faculty", "ไม่ระบุ"),
+                        "branch": data.get("branch", "ไม่ระบุ"),
+                        "last_status": data.get("last_status", "Clock-OUT"),
+                        "last_update_date": data.get("last_update_date", ""),
+                        "last_update_time": data.get("last_update_time", ""),
+                    }
+                has_changes = True
+                    
+            elif change.type.name == 'REMOVED':
+                keys_to_delete = [k for k, v in shared_state.valid_keys.items() if v.get("doc_id") == doc.id]
+                for k in keys_to_delete:
+                    del shared_state.valid_keys[k]
+                has_changes = True
+
+        # หากมีข้อมูลเปลี่ยนแปลง (Delta) ให้อัปเดตไฟล์แคช
+        if has_changes:
+            save_local_users_cache()
+            log(f"- Database Sync: Updated memory & cache. Total active keys: {len(shared_state.valid_keys)}")
+        
+    except Exception as e:
+        log(f"❌ Firebase Update Error: {e}")
+
+        
