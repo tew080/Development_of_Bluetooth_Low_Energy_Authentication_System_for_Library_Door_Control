@@ -377,7 +377,7 @@ def show_dashboard_graph():
                             <div class="flex justify-between items-center mb-4">
                                 <div>
                                     <h2 class="text-base font-bold text-slate-700 flex items-center gap-2" id="top5Title">
-                                        <span>🏆</span> 5 อันดับนักศึกษาเข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)
+                                        <span>🏆</span> 5 อันดับสมาชิกที่ที่เข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)
                                     </h2>
                                     <p class="text-xs text-slate-500 mt-1" id="top5Subtitle">จัดอันดับจากความถี่การเข้าใช้งานทั้งหมดตามช่วงเวลาที่เลือก</p>
                                 </div>
@@ -422,7 +422,7 @@ def show_dashboard_graph():
                                     <div id="avgTimeEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center px-6">
                                         <p class="text-sm font-semibold text-slate-500 mb-1">ยังไม่มีข้อมูลเวลาเฉลี่ยในช่วงที่เลือก</p>
                                         <p class="text-xs text-slate-400 leading-relaxed max-w-xs">
-                                            สาเหตุหลักมักมาจากการที่นักศึกษามีแต่ประวัติ Clock-IN แต่ไม่มีการแตะบัตร Clock-OUT
+                                            สาเหตุหลักมักมาจากการที่สมาชิกที่มีแต่ประวัติ Clock-IN แต่ไม่มีการแตะบัตร Clock-OUT
                                             ทำให้ระบบไม่สามารถนำมาลบกันเพื่อหาระยะเวลาการใช้งานได้
                                         </p>
                                     </div>
@@ -757,7 +757,7 @@ def show_dashboard_graph():
                     if (selFac === "คณะทั้งหมด") {
                         isFacultyView = false;
                         logsForRanking = dateFilteredLogs; 
-                        top5Title.innerHTML = `<span>🏆</span> 5 อันดับนักศึกษาเข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)`;
+                        top5Title.innerHTML = `<span>🏆</span> 5 อันดับสมาชิกที่เข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)`;
                         top5Subtitle.innerText = `จัดอันดับจากความถี่การเข้าใช้งานทั้งหมด (ทุกคณะ)`;
                         top5GroupHeader.innerText = `คณะ`;
                     } else if (selFac === "บุคคลภายนอก") {
@@ -769,7 +769,7 @@ def show_dashboard_graph():
                     } else {
                         isFacultyView = true;
                         logsForRanking = currentFilteredLogs; 
-                        top5Title.innerHTML = `<span>🎓</span> 5 อันดับนักศึกษาเข้าใช้งานสูงสุด (<span class="text-blue-600">คณะ${selFac}</span>)`;
+                        top5Title.innerHTML = `<span>🎓</span> 5 อันดับสมาชิกที่เข้าใช้งานสูงสุด (<span class="text-blue-600">คณะ${selFac}</span>)`;
                         top5Subtitle.innerText = `จัดอันดับจำแนกเฉพาะในระดับคณะ`;
                         top5GroupHeader.innerText = `สาขา`;
                     }

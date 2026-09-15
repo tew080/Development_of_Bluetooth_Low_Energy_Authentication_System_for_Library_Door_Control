@@ -1,6 +1,8 @@
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
+import re
+import unicodedata
 
 from PIL import ImageTk
 from thai_font import create_thai_text_image
@@ -73,10 +75,10 @@ def open_edit_window(parent):
     notebook.pack(fill=tk.BOTH, expand=True)
 
 # ==========================================
-    # TAB 1: จัดการข้อมูลนักศึกษา (student)
+    # TAB 1: จัดการข้อมูลสมาชิก (student)
     # ==========================================
     tab_student = tk.Frame(notebook, bg="#34495e")
-    notebook.add(tab_student, text="ข้อมูลนักศึกษา ")
+    notebook.add(tab_student, text="แก้ไขข้อมูลสมาชิก")
 
     st_center_frame = tk.Frame(tab_student, bg="#34495e")
     st_center_frame.pack(expand=True, fill=tk.BOTH, pady=20)
@@ -110,7 +112,7 @@ def open_edit_window(parent):
         """ฟังก์ชันค้นหาข้อมูลนักศึกษาจากฐานข้อมูล (รองรับ ID และ ชื่อ-สกุล)"""
         query_text = entry_search.get().strip()
         if not query_text:
-            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกรหัสนักศึกษา หรือ ชื่อ-สกุล")
+            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกรหัสสมาชิก หรือ ชื่อ-สกุล")
             return
         
         btn_search.config(state="disabled", text="กำลังค้นหา...")
@@ -198,9 +200,9 @@ def open_edit_window(parent):
             success = update_member_data(member_id, update_data)
             
             def update_ui():
-                btn_save_st.config(state="normal", text="บันทึกการแก้ไขข้อมูลนักศึกษา")
+                btn_save_st.config(state="normal", text="บันทึกการแก้ไขข้อมูลสมาชิก")
                 if success:
-                    messagebox.showinfo("สำเร็จ", "อัปเดตข้อมูลนักศึกษาเรียบร้อยแล้ว")
+                    messagebox.showinfo("สำเร็จ", "อัปเดตข้อมูลสมาชิกเรียบร้อยแล้ว")
                 else:
                     messagebox.showerror("ข้อผิดพลาด", "ไม่สามารถอัปเดตข้อมูลได้")
             
@@ -208,7 +210,7 @@ def open_edit_window(parent):
 
         threading.Thread(target=save_data_task, daemon=True).start()
 
-    btn_save_st = tk.Button(st_center_frame, text="บันทึกการแก้ไขข้อมูลนักศึกษา", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", cursor="hand2", command=save_student)
+    btn_save_st = tk.Button(st_center_frame, text="บันทึกการแก้ไขข้อมูลสมาชิก", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", cursor="hand2", command=save_student)
     btn_save_st.pack(pady=10)
 
     # ==========================================
@@ -228,16 +230,54 @@ def open_edit_window(parent):
     form_ext = tk.Frame(ext_center_frame, bg="#34495e")
     form_ext.pack(pady=10)
 
+    def valid_person_name(value):
+        """รับเฉพาะตัวอักษร ช่องว่าง และขีดกลางสำหรับชื่อบุคคล"""
+        return all(
+            character.isalpha()
+            or character.isspace()
+            or character == "-"
+            or unicodedata.category(character).startswith("M")
+            for character in value
+        )
+
+    name_validation = (edit_win.register(valid_person_name), "%P")
+    email_validation = (
+        edit_win.register(lambda value: not any(character.isspace() for character in value)),
+        "%P",
+    )
+
     ext_fields = [
-        ("คำนำหน้า:", var_ext_prefix),
-        ("ชื่อ:", var_ext_fname),
-        ("นามสกุล:", var_ext_lname),
+        ("คำนำหน้า *:", var_ext_prefix),
+        ("ชื่อ *:", var_ext_fname),
+        ("นามสกุล *:", var_ext_lname),
         ("อีเมล:", var_ext_email)
     ]
 
     for i, (label_text, var) in enumerate(ext_fields):
         tk.Label(form_ext, text=label_text, bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=i, column=0, sticky="e", pady=8, padx=10)
-        tk.Entry(form_ext, textvariable=var, font=("Arial", 12), width=35).grid(row=i, column=1, pady=8, padx=10)
+        entry_options = {
+            "font": ("Arial", 12),
+            "width": 35,
+        }
+        if i < 3:
+            entry_options.update(
+                validate="key",
+                validatecommand=name_validation,
+            )
+        else:
+            entry_options.update(
+                validate="key",
+                validatecommand=email_validation,
+            )
+        tk.Entry(form_ext, textvariable=var, **entry_options).grid(row=i, column=1, pady=8, padx=10)
+
+    lbl_external_result = tk.Label(
+        ext_center_frame,
+        text="",
+        bg="#34495e",
+        fg="#f1c40f",
+        font=("Arial", 16, "bold"),
+    )
 
     def save_external():
         prefix = var_ext_prefix.get().strip()
@@ -245,8 +285,23 @@ def open_edit_window(parent):
         lname = var_ext_lname.get().strip()
         email = var_ext_email.get().strip()
 
+        missing_fields = []
+        if not prefix:
+            missing_fields.append("คำนำหน้า")
         if not fname:
-            messagebox.showwarning("แจ้งเตือน", "กรุณากรอกชื่อผู้ใช้งานภายนอก")
+            missing_fields.append("ชื่อ")
+        if not lname:
+            missing_fields.append("นามสกุล")
+
+        if missing_fields:
+            messagebox.showwarning(
+                "ข้อมูลไม่ครบ",
+                f"กรุณากรอก: {', '.join(missing_fields)}",
+            )
+            return
+
+        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            messagebox.showwarning("รูปแบบไม่ถูกต้อง", "กรุณากรอกอีเมลให้ถูกต้อง เช่น name@example.com")
             return
 
         btn_save_ext.config(state="disabled", text="กำลังบันทึก...")
@@ -257,7 +312,11 @@ def open_edit_window(parent):
             def update_ui():
                 btn_save_ext.config(state="normal", text="บันทึกข้อมูลบุคคลภายนอก")
                 if success:
-                    messagebox.showinfo("สำเร็จ", f"บันทึกสำเร็จ! รหัสผู้ใช้งานภายนอกคือ: {result_id}")
+                    lbl_external_result.config(
+                        text=f"บันทึกสำเร็จ\nรหัสสมาชิกภายนอก: {result_id}",
+                        fg="#f1c40f",
+                    )
+                    lbl_external_result.pack(pady=(5, 0))
                     var_ext_prefix.set("")
                     var_ext_fname.set("")
                     var_ext_lname.set("")
@@ -513,7 +572,7 @@ def open_admin_window(root):
         "กำลังโหลดแดชบอร์ด...",
     )
     create_menu_button(
-        "นำเข้าข้อมูลผู้ใช้งาน (CSV)", "#27ae60", import_csv_to_firebase,
+        "นำเข้าข้อมูลสมาชิก (CSV)", "#27ae60", import_csv_to_firebase,
         "กำลังนำเข้าข้อมูล...",
     )
     create_menu_button(
@@ -523,7 +582,7 @@ def open_admin_window(root):
         "กำลังนำเข้าประวัติ...",
     )
     create_menu_button(
-        "ตั้งค่าระบบและแก้ไขข้อมูลบุคคล",
+        "ตั้งค่าระบบและจัดการข้อมูลสมาชิก",
         "#d35400",
         lambda: open_edit_window(admin_window),
         "กำลังเปิดหน้าต่าง...",
