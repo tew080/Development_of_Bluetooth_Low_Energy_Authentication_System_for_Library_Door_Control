@@ -4,7 +4,7 @@ class Config:
     UNLOCK_DELAY = 3
 
     FB_KEY_PATH = "key/studentdata-37c33-firebase-adminsdk-fbsvc-cb5aa64e79.json"
-    COLLECTION_STUDENT = "student"
+    COLLECTION_MEMBER = "member"
     COLLECTION_ATTENDANCE = "attendance_logs"
     COLLECTION_CONFIG = "connect"
     FIELD_NAME = "key"

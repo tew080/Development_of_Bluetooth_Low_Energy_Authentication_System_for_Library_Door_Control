@@ -422,25 +422,25 @@
                 }
 
                 function calculateTopStudents(logs) {
-                    const studentMap = {};
+                    const memberMap = {};
                     logs.forEach(log => {
-                        const sid = log.student_id;
-                        if (!studentMap[sid]) {
-                            studentMap[sid] = {
-                                student_id: sid,
+                        const memberId = log.member_id;
+                        if (!memberMap[memberId]) {
+                            memberMap[memberId] = {
+                                member_id: memberId,
                                 full_name: (log.first_name !== "ไม่ระบุ" ? log.first_name : "") + " " + (log.last_name || ""),
                                 faculty: log.faculty || 'ไม่ระบุ',
                                 branch: log.branch || 'ไม่ระบุ',
                                 count: 0
                             };
-                            if (studentMap[sid].full_name.trim() === "") {
-                                studentMap[sid].full_name = sid;
+                            if (memberMap[memberId].full_name.trim() === "") {
+                                memberMap[memberId].full_name = memberId;
                             }
                         }
-                        studentMap[sid].count += 1;
+                        memberMap[memberId].count += 1;
                     });
 
-                    return Object.values(studentMap)
+                    return Object.values(memberMap)
                         .sort((a, b) => b.count - a.count)
                         .slice(0, 5);
                 }
@@ -500,7 +500,7 @@
                     });
 
                     // --- KPIs ---
-                    const uniqueUsersCount = new Set(currentFilteredLogs.map(log => log.student_id)).size;
+                    const uniqueUsersCount = new Set(currentFilteredLogs.map(log => log.member_id)).size;
                     document.getElementById('kpi-inside').innerText = filteredInside.length;
                     document.getElementById('kpi-unique-users').innerText = uniqueUsersCount;
                     document.getElementById('kpi-total').innerText = currentFilteredLogs.length;
@@ -593,7 +593,7 @@
                         if (!dailyUsersMap[key]) {
                             dailyUsersMap[key] = new Set();
                         }
-                        dailyUsersMap[key].add(row.student_id);
+                        dailyUsersMap[key].add(row.member_id);
                     });
 
                     const sortedKeys = Object.keys(trendSummary).sort();
@@ -699,8 +699,8 @@
 
                     const uniqueUsersMap = {};
                     currentFilteredLogs.forEach(d => {
-                        if (!uniqueUsersMap[d.student_id]) {
-                            uniqueUsersMap[d.student_id] = d;
+                        if (!uniqueUsersMap[d.member_id]) {
+                            uniqueUsersMap[d.member_id] = d;
                         }
                     });
 

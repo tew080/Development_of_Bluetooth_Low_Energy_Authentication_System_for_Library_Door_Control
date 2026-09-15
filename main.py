@@ -2,6 +2,9 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from PIL import ImageTk
+from thai_font import create_thai_text_image
+
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 import shared_state
@@ -10,8 +13,8 @@ from dashboard import show_dashboard_graph
 from db_manager import (
     import_csv_to_firebase,
     import_attendance_csv_to_firebase,
-    get_student_by_id,
-    update_student_data,
+    get_member_by_id,
+    update_member_data,
     get_admin_email_config,
     update_admin_email_config,
     get_ble_connect_config,
@@ -118,14 +121,14 @@ def open_edit_window(parent):
             
             # 1. ลองค้นหาด้วย ID ก่อน (ฟังก์ชันเดิมของคุณ)
             try:
-                data = get_student_by_id(query_text)
+                data = get_member_by_id(query_text)
             except Exception as e:
                 pass
             
             # 2. ถ้าไม่พบข้อมูล ลองค้นหาจาก ชื่อ หรือ ชื่อ-สกุล ใน Firestore
             if not data and shared_state.db is not None:
                 parts = query_text.split()
-                students_ref = shared_state.db.collection(Config.COLLECTION_STUDENT)
+                students_ref = shared_state.db.collection(Config.COLLECTION_MEMBER)
                 
                 try:
                     if len(parts) >= 2:
@@ -177,8 +180,8 @@ def open_edit_window(parent):
     def save_student():
         """ฟังก์ชันบันทึกข้อมูลนักศึกษากลับไปยัง Firebase"""
         # ใช้ ID จากที่ระบบดึงมาได้ (ป้องกันบั๊กกรณีช่องค้นหาเป็นชื่อ)
-        sid = current_target_id["id"] or entry_search.get().strip()
-        if not sid: return
+        member_id = current_target_id["id"] or entry_search.get().strip()
+        if not member_id: return
         
         btn_save_st.config(state="disabled", text="กำลังบันทึก...")
 
@@ -192,7 +195,7 @@ def open_edit_window(parent):
                 "branch": var_branch.get().strip(),
                 Config.FIELD_NAME: var_key.get().strip()
             }
-            success = update_student_data(sid, update_data)
+            success = update_member_data(member_id, update_data)
             
             def update_ui():
                 btn_save_st.config(state="normal", text="บันทึกการแก้ไขข้อมูลนักศึกษา")
@@ -421,62 +424,111 @@ def open_admin_window(root):
     center_frame = tk.Frame(admin_window, bg="#34495e")
     center_frame.pack(expand=True)
 
-    lbl_admin = tk.Label(
-        center_frame, text="ตั้งค่าระบบ / จัดการข้อมูล", font=("Arial", 36, "bold"), fg="white", bg="#34495e"
+    admin_title_image = create_thai_text_image(
+        "ตั้งค่าระบบ / จัดการข้อมูล",
+        font_size=36,
+        text_color="white",
+        background="#34495e",
+        padding_x=8,
+        padding_y=4,
     )
+    admin_title_image = ImageTk.PhotoImage(admin_title_image)
+    lbl_admin = tk.Label(
+        center_frame,
+        image=admin_title_image,
+        bg="#34495e",
+        borderwidth=0,
+        highlightthickness=0,
+    )
+    lbl_admin.image = admin_title_image
     lbl_admin.pack(pady=(10, 30))
 
-    # 1. ปุ่มสำหรับแสดงแดชบอร์ด
-    btn_dashboard = tk.Button(
-        center_frame,
-        text="แดชบอร์ดสถิติการเข้าใช้งาน",
-        font=("Arial", 16, "bold"),
-        bg="#3498db",
-        fg="white",
-        pady=12,
-        width=35,
-        command=show_dashboard_graph,
-    )
-    btn_dashboard.pack(pady=10)
+    menu_width = 446
+    menu_height = 56
 
-    # 2. ปุ่มนำเข้าข้อมูลรายชื่อผู้ใช้งาน
-    btn_import = tk.Button(
-        center_frame,
-        text="นำเข้าข้อมูลผู้ใช้งาน (CSV)",
-        font=("Arial", 16, "bold"),
-        bg="#27ae60",
-        fg="white",
-        pady=12,
-        width=35,
-        command=import_csv_to_firebase,
-    )
-    btn_import.pack(pady=10)
+    def create_menu_button(text, background, command, busy_text, background_task=True):
+        def make_image(label):
+            image = create_thai_text_image(
+                label,
+                font_size=25,
+                text_color="white",
+                background=background,
+                padding_x=12,
+                padding_y=12,
+                fixed_width=menu_width - 2,
+                fixed_height=menu_height - 2,
+            )
+            return ImageTk.PhotoImage(image)
 
-    # 3. ปุ่มนำเข้าประวัติการใช้งาน
-    btn_import_attendance = tk.Button(
-        center_frame,
-        text="นำเข้าประวัติการเข้าใช้งาน(CSV)(ใช้สำหรับทดสอบ)",
-        font=("Arial", 16, "bold"),
-        bg="#8e44ad",
-        fg="white",
-        pady=12,
-        width=35,
-        command=import_attendance_csv_to_firebase,
-    )
-    btn_import_attendance.pack(pady=10)
+        image = make_image(text)
+        busy_image = make_image(busy_text)
+        button = tk.Button(
+            center_frame,
+            image=image,
+            bg=background,
+            activebackground=background,
+            borderwidth=1,
+            relief="raised",
+            padx=0,
+            pady=0,
+            highlightthickness=0,
+            command=command,
+        )
+        button.image = image
+        button.busy_image = busy_image
+        button.pack(pady=10)
 
-    # 4. ปุ่มเปิดหน้าต่างแก้ไขข้อมูลและตั้งค่าระบบ
-    btn_edit = tk.Button(
-        center_frame,
-        text="ตั้งค่าระบบและแก้ไขข้อมูลบุคคล",
-        font=("Arial", 16, "bold"),
-        bg="#d35400",
-        fg="white",
-        pady=12,
-        width=35,
-        command=lambda: open_edit_window(admin_window)
+        def run_command_with_status():
+            button.config(image=button.busy_image, state="disabled", cursor="watch")
+
+            if not background_task:
+                command()
+                button.config(image=button.image, state="normal", cursor="hand2")
+                return
+
+            def worker():
+                try:
+                    result = command()
+                    if isinstance(result, threading.Thread):
+                        result.join()
+                finally:
+                    def restore_button():
+                        if button.winfo_exists():
+                            button.config(
+                                image=button.image,
+                                state="normal",
+                                cursor="hand2",
+                            )
+
+                    if root.winfo_exists():
+                        root.after(0, restore_button)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        button.config(command=run_command_with_status, cursor="hand2")
+        return button
+
+    create_menu_button(
+        "แดชบอร์ดสถิติการเข้าใช้งาน", "#3498db", show_dashboard_graph,
+        "กำลังโหลดแดชบอร์ด...",
     )
-    btn_edit.pack(pady=10)
+    create_menu_button(
+        "นำเข้าข้อมูลผู้ใช้งาน (CSV)", "#27ae60", import_csv_to_firebase,
+        "กำลังนำเข้าข้อมูล...",
+    )
+    create_menu_button(
+        "นำเข้าประวัติการเข้าใช้งาน(CSV)(ใช้สำหรับทดสอบ)",
+        "#8e44ad",
+        import_attendance_csv_to_firebase,
+        "กำลังนำเข้าประวัติ...",
+    )
+    create_menu_button(
+        "ตั้งค่าระบบและแก้ไขข้อมูลบุคคล",
+        "#d35400",
+        lambda: open_edit_window(admin_window),
+        "กำลังเปิดหน้าต่าง...",
+        background_task=False,
+    )
 
     tk.Label(center_frame, text="* สามารถกดปุ่ม F11 เพื่อเปิด/ปิด โหมดเต็มหน้าจอได้ *", font=("Arial", 12), fg="#bdc3c7", bg="#34495e").pack(pady=20)
 
@@ -525,17 +577,30 @@ def setup_gui():
     )
     lbl_user.pack(pady=(0, 20))
 
+    admin_menu_image = create_thai_text_image(
+        "ตั้งค่าระบบ / จัดการข้อมูล",
+        font_size=25,
+        text_color="white",
+        background="#7f8c8d",
+        padding_x=16,
+        padding_y=14,
+    )
+    admin_menu_image = ImageTk.PhotoImage(admin_menu_image)
+
     # ปุ่มกดเข้าสู่เมนูจัดการของผู้ดูแลระบบ (Admin)
     btn_admin_menu = tk.Button(
         main_frame,
-        text="ตั้งค่าระบบ / จัดการข้อมูล",
-        font=("Arial", 16, "bold"),
+        image=admin_menu_image,
         bg="#7f8c8d",
-        fg="white",
-        padx=20,
-        pady=10,
+        activebackground="#7f8c8d",
+        borderwidth=1,
+        relief="raised",
+        padx=0,
+        pady=0,
+        highlightthickness=0,
         command=lambda: open_admin_window(root)
     )
+    btn_admin_menu.image = admin_menu_image
     btn_admin_menu.pack(pady=20)
 
     def update_gui():

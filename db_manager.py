@@ -25,7 +25,7 @@ def init_firebase():
             firebase_admin.initialize_app(cred)
         shared_state.db = firestore.client()
         fetch_ble_config()
-        shared_state.db.collection(Config.COLLECTION_STUDENT).on_snapshot(
+        shared_state.db.collection(Config.COLLECTION_MEMBER).on_snapshot(
             on_snapshot_update
         )
         log("- Firebase Connected & Syncing...")
@@ -80,7 +80,7 @@ def on_snapshot_update(col_snapshot, changes, read_time):
                 if key:
                     shared_state.valid_keys[key] = {
                         "doc_id": doc.id,
-                        "student_id": data.get("student_id", doc.id),
+                        "member_id": data.get("member_id") or data.get("student_id", doc.id),
                         "prefix": data.get("prefix", ""),
                         "first_name": data.get("first_name", "ไม่ระบุ"),
                         "last_name": data.get("last_name", ""),
@@ -106,34 +106,34 @@ def sync_record_attendance(doc_id):
     today_date = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
-    # 🔥 OPTIMIZATION 1: ดึงข้อมูลนักศึกษาจาก In-Memory valid_keys แทนการเรียก student_ref.get() (0 Reads!)
-    student_info = None
+    # 🔥 OPTIMIZATION 1: ดึงข้อมูลผู้ใช้งานจาก In-Memory valid_keys แทนการเรียก member_ref.get() (0 Reads!)
+    member_info = None
     for k, v in shared_state.valid_keys.items():
-        if v.get("doc_id") == doc_id or v.get("student_id") == doc_id:
-            student_info = v
+        if v.get("doc_id") == doc_id or v.get("member_id") == doc_id:
+            member_info = v
             break
 
-    if student_info:
-        prefix = student_info.get("prefix", "")
-        first_name = student_info.get("first_name", "ไม่ระบุ")
-        last_name = student_info.get("last_name", "")
-        faculty = student_info.get("faculty", "ไม่ระบุ")
-        branch = student_info.get("branch", "ไม่ระบุ")
-        last_status = student_info.get("last_status", "Clock-OUT")
-        last_update_date = student_info.get("last_update_date", "")
+    if member_info:
+        prefix = member_info.get("prefix", "")
+        first_name = member_info.get("first_name", "ไม่ระบุ")
+        last_name = member_info.get("last_name", "")
+        faculty = member_info.get("faculty", "ไม่ระบุ")
+        branch = member_info.get("branch", "ไม่ระบุ")
+        last_status = member_info.get("last_status", "Clock-OUT")
+        last_update_date = member_info.get("last_update_date", "")
     else:
         # Fallback กรณีไม่มีใน RAM memory จริงๆ
-        student_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(doc_id)
-        student_doc = student_ref.get()
-        if student_doc.exists:
-            student_data = student_doc.to_dict()
-            prefix = student_data.get("prefix", "")
-            first_name = student_data.get("first_name", "ไม่ระบุ")
-            last_name = student_data.get("last_name", "")
-            faculty = student_data.get("faculty", "ไม่ระบุ")
-            branch = student_data.get("branch", "ไม่ระบุ")
-            last_status = student_data.get("last_status", "Clock-OUT")
-            last_update_date = student_data.get("last_update_date", "")
+        member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
+        member_doc = member_ref.get()
+        if member_doc.exists:
+            member_data = member_doc.to_dict()
+            prefix = member_data.get("prefix", "")
+            first_name = member_data.get("first_name", "ไม่ระบุ")
+            last_name = member_data.get("last_name", "")
+            faculty = member_data.get("faculty", "ไม่ระบุ")
+            branch = member_data.get("branch", "ไม่ระบุ")
+            last_status = member_data.get("last_status", "Clock-OUT")
+            last_update_date = member_data.get("last_update_date", "")
         else:
             prefix, first_name, last_name, faculty, branch, last_status, last_update_date = "", "ไม่ระบุ", "", "ไม่ระบุ", "ไม่ระบุ", "Clock-OUT", ""
 
@@ -145,8 +145,8 @@ def sync_record_attendance(doc_id):
         new_status = "Clock-IN" if last_status == "Clock-OUT" else "Clock-OUT"
 
     # 🔥 OPTIMIZATION 2: รวมการตั้งค่า checkinoutStatus = True ไว้ใน Write เดียวกัน
-    student_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(doc_id)
-    student_ref.set(
+    member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
+    member_ref.set(
         {
             "last_status": new_status,
             "last_update_date": today_date,
@@ -161,7 +161,7 @@ def sync_record_attendance(doc_id):
     log_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE).document(log_doc_id)
 
     new_log_event = {
-        "student_id": doc_id,
+        "member_id": doc_id,
         "prefix": prefix,
         "first_name": first_name,
         "last_name": last_name,
@@ -202,12 +202,16 @@ def import_csv_to_firebase():
         with open(file_path, mode="r", encoding="utf-8-sig") as file:
             reader = csv.DictReader(file)
             headers = [str(h).strip() for h in reader.fieldnames if h]
-            if "student_id" not in headers:
-                messagebox.showerror("Format Error", "CSV must contain a 'student_id' column.")
+            id_column = "member_id" if "member_id" in headers else "student_id"
+            if id_column not in headers:
+                messagebox.showerror("Format Error", "CSV must contain a 'member_id' column.")
                 return
 
             batch = shared_state.db.batch()
-            count_processed, operations_in_batch = 0, 0
+            count_processed, count_updated = 0, 0
+            duplicate_count, operations_in_batch = 0, 0
+            seen_doc_ids = set()
+            pending_refs = []
 
             for row in reader:
                 clean_row = {}
@@ -221,13 +225,17 @@ def import_csv_to_firebase():
                             clean_val = ""
                         clean_row[clean_key] = clean_val
 
-                doc_id = clean_row.get("student_id", "")
+                doc_id = clean_row.get(id_column, "")
                 if not doc_id:
                     continue
+                if doc_id in seen_doc_ids:
+                    duplicate_count += 1
+                    continue
+                seen_doc_ids.add(doc_id)
 
                 student_data = {}
                 for key, val_str in clean_row.items():
-                    if key == "student_id":
+                    if key in {"member_id", "student_id"}:
                         continue
                     if key in ["current_otp", "otp_expiry"]:
                         student_data[key] = int(val_str) if val_str.isdigit() else 0
@@ -240,24 +248,35 @@ def import_csv_to_firebase():
                 if not student_data:
                     continue
 
-                doc_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(doc_id)
+                doc_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
                 # ใช้ merge=True เพื่อให้ Firestore ทับเฉพาะฟิลด์ใหม่โดยไม่ลบฟิลด์เดิม ไม่ต้องโหลดข้อมูลมาเช็คก่อน
                 batch.set(doc_ref, student_data, merge=True)
+                pending_refs.append(doc_ref)
                 
                 count_processed += 1
                 operations_in_batch += 1
 
                 if operations_in_batch >= 400:
+                    count_updated += sum(
+                        doc.exists for doc in shared_state.db.get_all(pending_refs)
+                    )
                     batch.commit()
                     batch = shared_state.db.batch()
                     operations_in_batch = 0
+                    pending_refs = []
 
             if operations_in_batch > 0:
+                count_updated += sum(
+                    doc.exists for doc in shared_state.db.get_all(pending_refs)
+                )
                 batch.commit()
 
+            count_added = count_processed - count_updated
             messagebox.showinfo(
                 "Import Summary",
-                f"- นำเข้าและอัปเดตข้อมูลสำเร็จทั้งหมด: {count_processed} รายการ"
+                f"- เพิ่มข้อมูลใหม่: {count_added} รายการ\n"
+                f"- อัปเดตข้อมูลเดิม: {count_updated} รายการ\n"
+                f"- ข้อมูลซ้ำไม่เพิ่ม: {duplicate_count} รายการ"
             )
 
     except Exception as e:
@@ -283,13 +302,17 @@ def import_attendance_csv_to_firebase():
         with open(file_path, mode="r", encoding="utf-8-sig") as file:
             reader = csv.DictReader(file)
             headers = [str(h).strip() for h in reader.fieldnames if h]
-            required_cols = {"student_id", "date", "time"}
+            id_column = "member_id" if "member_id" in headers else "student_id"
+            required_cols = {id_column, "date", "time"}
             if not required_cols.issubset(set(headers)):
-                messagebox.showerror("Format Error", "CSV must contain 'student_id', 'date' and 'time' columns.")
+                messagebox.showerror("Format Error", "CSV must contain 'member_id', 'date' and 'time' columns.")
                 return
 
             batch = shared_state.db.batch()
-            count_processed, operations_in_batch = 0, 0
+            count_processed, count_updated = 0, 0
+            duplicate_count, operations_in_batch = 0, 0
+            seen_doc_ids = set()
+            pending_refs = []
 
             for row in reader:
                 clean_row = {}
@@ -303,20 +326,24 @@ def import_attendance_csv_to_firebase():
                             clean_val = ""
                         clean_row[clean_key] = clean_val
 
-                student_id = clean_row.get("student_id", "")
+                member_id = clean_row.get(id_column, "")
                 date_str = clean_row.get("date", "")
                 time_str = clean_row.get("time", "")
 
-                if not student_id or not date_str or not time_str:
+                if not member_id or not date_str or not time_str:
                     continue
 
                 doc_id = clean_row.get("doc_id", "").strip()
                 if not doc_id:
-                    doc_id = f"{date_str}_{time_str.replace(':', '')}_{student_id}"
+                    doc_id = f"{date_str}_{time_str.replace(':', '')}_{member_id}"
+                if doc_id in seen_doc_ids:
+                    duplicate_count += 1
+                    continue
+                seen_doc_ids.add(doc_id)
 
-                log_data = {}
+                log_data = {"member_id": member_id}
                 for key, val_str in clean_row.items():
-                    if key == "doc_id":
+                    if key in {"doc_id", "member_id", "student_id"}:
                         continue
                     if key == "is_first_visit":
                         log_data[key] = val_str.strip().lower() == "true"
@@ -325,50 +352,61 @@ def import_attendance_csv_to_firebase():
 
                 doc_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE).document(doc_id)
                 batch.set(doc_ref, log_data, merge=True)
+                pending_refs.append(doc_ref)
                 
                 count_processed += 1
                 operations_in_batch += 1
 
                 if operations_in_batch >= 400:
+                    count_updated += sum(
+                        doc.exists for doc in shared_state.db.get_all(pending_refs)
+                    )
                     batch.commit()
                     batch = shared_state.db.batch()
                     operations_in_batch = 0
+                    pending_refs = []
 
             if operations_in_batch > 0:
+                count_updated += sum(
+                    doc.exists for doc in shared_state.db.get_all(pending_refs)
+                )
                 batch.commit()
 
+            count_added = count_processed - count_updated
             messagebox.showinfo(
                 "Import Summary",
-                f"- นำเข้า Attendance Logs สำเร็จทั้งหมด: {count_processed} รายการ"
+                f"- เพิ่มข้อมูลใหม่: {count_added} รายการ\n"
+                f"- อัปเดตข้อมูลเดิม: {count_updated} รายการ\n"
+                f"- ข้อมูลซ้ำไม่เพิ่ม: {duplicate_count} รายการ"
             )
 
     except Exception as e:
         log(f"❌ Attendance Log CSV Import Error: {e}")
         messagebox.showerror("Import Error", f"- นำเข้าข้อมูล Attendance Logs จาก CSV ไม่สำเร็จ:\n{str(e)}")
 
-def get_student_by_id(student_id):
+def get_member_by_id(member_id):
     if shared_state.db is None:
         return None
     try:
-        doc_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(student_id)
+        doc_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(member_id)
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
         return None
     except Exception as e:
-        log(f"❌ Error fetching student: {e}")
+        log(f"❌ Error fetching member: {e}")
         return None
 
-def update_student_data(student_id, update_data):
+def update_member_data(member_id, update_data):
     if shared_state.db is None:
         return False
     try:
-        doc_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(student_id)
+        doc_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(member_id)
         doc_ref.set(update_data, merge=True)
-        log(f"- Successfully updated student ID: {student_id}")
+        log(f"- Successfully updated member ID: {member_id}")
         return True
     except Exception as e:
-        log(f"❌ Error updating student: {e}")
+        log(f"❌ Error updating member: {e}")
         return False
 
 # --- ฟังก์ชันจัดการ Collection admin ---
@@ -434,13 +472,13 @@ def add_external_person(prefix, first_name, last_name, email):
 
     try:
         # นับจำนวนบุคคลภายนอกเดิมเพื่อสร้าง ID รันอัตโนมัติ (เช่น ep0001)
-        docs = shared_state.db.collection(Config.COLLECTION_STUDENT)\
+        docs = shared_state.db.collection(Config.COLLECTION_MEMBER)\
             .where(filter=FieldFilter("faculty", "==", "บุคคลภายนอก")).stream()
         count = sum(1 for _ in docs)
         new_id = f"ep{count + 1:04d}"
 
         external_data = {
-            "student_id": new_id,
+            "member_id": new_id,
             "prefix": prefix.strip(),
             "first_name": first_name.strip(),
             "last_name": last_name.strip(),
@@ -455,7 +493,7 @@ def add_external_person(prefix, first_name, last_name, email):
         }
 
         # บันทึกลง Firestore โดยใช้ new_id เป็น Document ID
-        doc_ref = shared_state.db.collection(Config.COLLECTION_STUDENT).document(new_id)
+        doc_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(new_id)
         doc_ref.set(external_data, merge=True)
         
         log(f"- เพิ่มข้อมูลบุคคลภายนอกสำเร็จ ID: {new_id}")
@@ -495,7 +533,7 @@ def init_firebase():
             firebase_admin.initialize_app(cred)
         shared_state.db = firestore.client()
         fetch_ble_config()
-        shared_state.db.collection(Config.COLLECTION_STUDENT).on_snapshot(on_snapshot_update)
+        shared_state.db.collection(Config.COLLECTION_MEMBER).on_snapshot(on_snapshot_update)
         log("- Firebase Connected & Syncing...")
     except Exception as e:
         log(f"❌ Firebase Init Error: {e}")
@@ -521,7 +559,7 @@ def on_snapshot_update(col_snapshot, changes, read_time):
                 if key:
                     shared_state.valid_keys[key] = {
                         "doc_id": doc.id,
-                        "student_id": data.get("student_id", doc.id),
+                        "member_id": data.get("member_id") or data.get("student_id", doc.id),
                         "prefix": data.get("prefix", ""),
                         "first_name": data.get("first_name", "ไม่ระบุ"),
                         "last_name": data.get("last_name", ""),

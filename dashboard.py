@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import webbrowser
 from datetime import datetime, timedelta
 from tkinter import messagebox
@@ -13,6 +14,15 @@ from logger import log
 _raw_events_cache = []
 _last_fetch_timestamp = None
 CACHE_EXPIRATION_MINUTES = 10  # ป้องกันการอ่าน Firestore บ่อยเกินไป (อ่านสูงสุดไม่เกิน 1 ครั้งทุกๆ 10 นาที)
+_dashboard_refresh_guard = threading.Lock()
+
+def _normalize_event(event):
+    """Convert legacy student_id events to the member_id schema."""
+    normalized = dict(event)
+    if not normalized.get("member_id"):
+        normalized["member_id"] = normalized.get("student_id", "")
+    normalized.pop("student_id", None)
+    return normalized
 
 def update_dashboard_data_file(new_event=None, force_refresh=False):
     global _raw_events_cache, _last_fetch_timestamp
@@ -27,11 +37,11 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
             # โหลดแคชเดิมจากไฟล์
             if not _raw_events_cache and os.path.exists(cache_path):
                 with open(cache_path, 'r', encoding='utf-8') as f:
-                    _raw_events_cache = json.load(f)
+                    _raw_events_cache = [_normalize_event(event) for event in json.load(f)]
 
             # อัปเดตแคชเมื่อมี Event ใหม่ทันที (ประหยัดโควต้า)
             if new_event is not None:
-                _raw_events_cache.append(new_event)
+                _raw_events_cache.append(_normalize_event(new_event))
                 with open(cache_path, 'w', encoding='utf-8') as f:
                     json.dump(_raw_events_cache, f, ensure_ascii=False)
             
@@ -52,29 +62,32 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
                         .stream()
                     
                     new_fetched = []
-                    existing_doc_ids = {f"{e.get('date')}_{e.get('time').replace(':', '')}_{e.get('student_id')}" for e in _raw_events_cache}
+                    existing_doc_ids = {
+                        f"{e.get('date', '')}_{str(e.get('time', '')).replace(':', '')}_{e.get('member_id', '')}"
+                        for e in _raw_events_cache
+                    }
 
                     for doc in logs_ref:
                         d = doc.to_dict()
-                        s_id = d.get("student_id", "")
+                        m_id = d.get("member_id", "")
                         d_time = d.get("time", "00:00:00")
                         d_date = d.get("date", "")
                         
-                        doc_hash = f"{d_date}_{d_time.replace(':', '')}_{s_id}"
-                        if not s_id or doc_hash in existing_doc_ids:
+                        doc_hash = f"{d_date}_{d_time.replace(':', '')}_{m_id}"
+                        if not m_id or doc_hash in existing_doc_ids:
                             continue
 
-                        student_info = next((v for v in shared_state.valid_keys.values() if v.get("doc_id") == s_id or v.get("student_id") == s_id), {})
+                        member_info = next((v for v in shared_state.valid_keys.values() if v.get("doc_id") == m_id or v.get("member_id") == m_id), {})
                         
                         new_fetched.append({
-                            "student_id": s_id,
-                            "first_name": d.get("first_name") or student_info.get("first_name", "ไม่ระบุ"),
-                            "last_name": d.get("last_name") or student_info.get("last_name", ""),
+                            "member_id": m_id,
+                            "first_name": d.get("first_name") or member_info.get("first_name", "ไม่ระบุ"),
+                            "last_name": d.get("last_name") or member_info.get("last_name", ""),
                             "action": d.get("action", ""),
                             "date": d_date,
                             "time": d_time,
-                            "faculty": d.get("faculty") or student_info.get("faculty", "ไม่ระบุ"),
-                            "branch": d.get("branch") or student_info.get("branch", "ไม่ระบุ")
+                            "faculty": d.get("faculty") or member_info.get("faculty", "ไม่ระบุ"),
+                            "branch": d.get("branch") or member_info.get("branch", "ไม่ระบุ")
                         })
                     
                     if new_fetched:
@@ -92,7 +105,7 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
 
             for ev in raw_events:
                 action = ev.get("action", "")
-                s_id = ev.get("student_id", "")
+                m_id = ev.get("member_id", "")
                 d_date = ev.get("date", "")
                 d_time = ev.get("time", "00:00:00")
                 faculty = ev.get("faculty", "ไม่ระบุ")
@@ -102,7 +115,7 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
 
                 if action == "Clock-IN":
                     all_logs.append({
-                        "student_id": s_id,
+                        "member_id": m_id,
                         "first_name": first_name,
                         "last_name": last_name,
                         "date": d_date,
@@ -111,20 +124,22 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
                         "branch": branch
                     })
                     if d_date == today_date:
-                        if s_id not in latest_clock_in or d_time > latest_clock_in.get(s_id, ""):
-                            latest_clock_in[s_id] = d_time
+                        if m_id not in latest_clock_in or d_time > latest_clock_in.get(m_id, ""):
+                            latest_clock_in[m_id] = d_time
 
             # --- 3. คำนวณ session_data ---
             events_by_user_date = {}
             for ev in raw_events:
-                key = (ev["student_id"], ev["date"])
+                key = (ev.get("member_id", ""), ev.get("date", ""))
+                if not key[0] or not key[1]:
+                    continue
                 if key not in events_by_user_date:
                     events_by_user_date[key] = []
                 events_by_user_date[key].append(ev)
 
             session_data = []
             for key, events in events_by_user_date.items():
-                student_id, d_date = key
+                member_id, d_date = key
                 events.sort(key=lambda x: x["time"])
 
                 total_hours_today = 0.0
@@ -153,7 +168,7 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
 
                 if total_hours_today > 0:
                     session_data.append({
-                        "student_id": student_id,
+                        "member_id": member_id,
                         "first_name": first_name,
                         "last_name": last_name,
                         "date": d_date,
@@ -166,10 +181,10 @@ def update_dashboard_data_file(new_event=None, force_refresh=False):
             inside_list = []
             for k, info in shared_state.valid_keys.items():
                 if info.get("last_status") == "Clock-IN" and info.get("last_update_date") == today_date:
-                    sid = info.get("student_id") or info.get("doc_id", "")
+                    member_id = info.get("member_id") or info.get("doc_id", "")
                     time_in = info.get("last_update_time", "")
                     if not time_in or time_in == "-":
-                        time_in = latest_clock_in.get(sid, "-")
+                        time_in = latest_clock_in.get(member_id, "-")
 
                     inside_list.append({
                         "first_name": info.get("first_name", "ไม่ระบุ"),
@@ -197,7 +212,17 @@ def show_dashboard_graph():
 
     try:
         log("- กำลังเตรียมแดชบอร์ดสถิติระดับพรีเมียม...")
-        update_dashboard_data_file(force_refresh=True)
+
+        def refresh_dashboard_data():
+            if not _dashboard_refresh_guard.acquire(blocking=False):
+                return
+            try:
+                update_dashboard_data_file(force_refresh=True)
+            finally:
+                _dashboard_refresh_guard.release()
+
+        refresh_thread = threading.Thread(target=refresh_dashboard_data, daemon=True)
+        refresh_thread.start()
 
         html_content = """
         <!DOCTYPE html>
@@ -623,25 +648,25 @@ def show_dashboard_graph():
                 }
 
                 function calculateTopStudents(logs) {
-                    const studentMap = {};
+                    const memberMap = {};
                     logs.forEach(log => {
-                        const sid = log.student_id;
-                        if (!studentMap[sid]) {
-                            studentMap[sid] = {
-                                student_id: sid,
+                        const memberId = log.member_id;
+                        if (!memberMap[memberId]) {
+                            memberMap[memberId] = {
+                                member_id: memberId,
                                 full_name: (log.first_name !== "ไม่ระบุ" ? log.first_name : "") + " " + (log.last_name || ""),
                                 faculty: log.faculty || 'ไม่ระบุ',
                                 branch: log.branch || 'ไม่ระบุ',
                                 count: 0
                             };
-                            if (studentMap[sid].full_name.trim() === "") {
-                                studentMap[sid].full_name = sid;
+                            if (memberMap[memberId].full_name.trim() === "") {
+                                memberMap[memberId].full_name = memberId;
                             }
                         }
-                        studentMap[sid].count += 1;
+                        memberMap[memberId].count += 1;
                     });
 
-                    return Object.values(studentMap)
+                    return Object.values(memberMap)
                         .sort((a, b) => b.count - a.count)
                         .slice(0, 5);
                 }
@@ -701,7 +726,7 @@ def show_dashboard_graph():
                     });
 
                     // --- KPIs ---
-                    const uniqueUsersCount = new Set(currentFilteredLogs.map(log => log.student_id)).size;
+                    const uniqueUsersCount = new Set(currentFilteredLogs.map(log => log.member_id)).size;
                     document.getElementById('kpi-inside').innerText = filteredInside.length;
                     document.getElementById('kpi-unique-users').innerText = uniqueUsersCount;
                     document.getElementById('kpi-total').innerText = currentFilteredLogs.length;
@@ -794,7 +819,7 @@ def show_dashboard_graph():
                         if (!dailyUsersMap[key]) {
                             dailyUsersMap[key] = new Set();
                         }
-                        dailyUsersMap[key].add(row.student_id);
+                        dailyUsersMap[key].add(row.member_id);
                     });
 
                     const sortedKeys = Object.keys(trendSummary).sort();
@@ -900,8 +925,8 @@ def show_dashboard_graph():
 
                     const uniqueUsersMap = {};
                     currentFilteredLogs.forEach(d => {
-                        if (!uniqueUsersMap[d.student_id]) {
-                            uniqueUsersMap[d.student_id] = d;
+                        if (!uniqueUsersMap[d.member_id]) {
+                            uniqueUsersMap[d.member_id] = d;
                         }
                     });
 
@@ -1088,6 +1113,7 @@ def show_dashboard_graph():
 
         webbrowser.open('file://' + file_path)
         log("- แสดงแดชบอร์ดสถิติระดับมืออาชีพสำเร็จ")
+        return refresh_thread
 
     except Exception as e:
         log(f"❌ Graph Error: {e}")
