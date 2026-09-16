@@ -9,8 +9,8 @@ class FirestoreService {
   // ฟังก์ชันดึงข้อมูล User แบบครั้งเดียว (One-time get)
   // ใช้สำหรับตอน Login เพื่อเช็ค Password
   Future<DocumentSnapshot> getUser(String studentId) {
-    // เข้าไปที่ Collection 'students' และเลือก Doc ตาม studentId แล้วสั่ง get()
-    return _db.collection('student').doc(studentId).get();
+    // เข้าไปที่ Collection 'member' และเลือก Doc ตาม studentId แล้วสั่ง get()
+    return _db.collection('member').doc(studentId).get();
   }
 
   // ฟังก์ชันดึงข้อมูล User แบบครั้งเดียว (One-time get)
@@ -32,11 +32,11 @@ class FirestoreService {
   Stream<DocumentSnapshot> getUserStream(String studentId) {
     // เข้าไปที่ Collection 'students' -> Doc studentId แล้วสั่ง snapshots()
     // snapshots() จะส่งข้อมูลมาเรื่อยๆ เมื่อ DB มีการเปลี่ยนแปลง
-    return _db.collection('student').doc(studentId).snapshots();
+    return _db.collection('member').doc(studentId).snapshots();
   }
 
   Future<void> updateUser(String studentId, Map<String, dynamic> data) async {
     // ใช้ update เพื่อแก้ไขเฉพาะฟิลด์ที่ส่งไป (ข้อมูลอื่นจะไม่หาย)
-    await _db.collection('student').doc(studentId).update(data);
+    await _db.collection('member').doc(studentId).update(data);
   }
 }
