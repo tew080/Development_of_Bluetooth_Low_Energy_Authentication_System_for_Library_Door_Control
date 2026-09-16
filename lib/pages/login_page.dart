@@ -401,7 +401,7 @@ class _LoginPageState extends State<LoginPage> {
                     border: Border.all(color: Colors.green.shade200),
                   ),
                   child: Text(
-                    'ส่งรหัส OTP 6 หลักไปที่เมล\n$_targetEmail\nกรุณาตรวจสอบในกล่องจดหมายของคุณ',
+                    'ส่งรหัส OTP 6 หลักไปที่เมล\n$_targetEmail\nตรวจสอบในกล่องจดหมายของคุณ',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.green,
@@ -422,7 +422,7 @@ class _LoginPageState extends State<LoginPage> {
                 // รับค่าเป็นตัวเลขเท่านั้น
                 //keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'รหัสนักศึกษา',
+                  labelText: 'รหัสสมาชิก',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.person, color: Colors.grey),
                 ),

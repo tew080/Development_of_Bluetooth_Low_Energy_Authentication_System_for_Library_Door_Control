@@ -80,9 +80,9 @@ class _AdvertisePageState extends State<AdvertisePage> {
       userName = userInfo['first_name'].toString() + " " + userInfo['last_name'].toString();
       userStatus = userInfo['last_status'].toString();
       if (userStatus == "Clock-IN") {
-        userStatus = "กำลังเข้าใช้บริการ";
+        userStatus = "เช็กอินแล้ว";
       } else if (userStatus == "Clock-OUT") {
-        userStatus = "ไม่ได้เข้าใช้บริการ";
+        userStatus = "เช็กเอาต์แล้ว";
       } else {
         userStatus = "ไม่ทราบสถานะ";
       }
