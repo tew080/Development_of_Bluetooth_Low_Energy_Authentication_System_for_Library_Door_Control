@@ -239,7 +239,7 @@ class _LoginPageState extends State<LoginPage> {
     String otp = generateKey(6, "otp");
 
     expiryTime = DateTime.now()
-        .add(const Duration(seconds: 30))
+        .add(const Duration(seconds: 60))
         .millisecondsSinceEpoch;
 
     // บันทึก OTP ลง Firestore
@@ -277,7 +277,7 @@ class _LoginPageState extends State<LoginPage> {
                   <p>รหัสสำหรับเข้าสู่ระบบของคุณคือ:</p>
                   <h1 style="color: #2196F3; font-size: 32px; letter-spacing: 5px;">$otp</h1>
                   <p style="color: #888;">นำรหัสนี้ไปกรอกในแอปพลิเคชัน BLE</p>
-                  <p style="color: red; font-weight: bold;">*รหัสนี้มีอายุการใช้งาน 30 วินาที*</p>
+                  <p style="color: red; font-weight: bold;">*รหัสนี้มีอายุการใช้งาน 60 วินาที*</p>
                 </div>
               """;
 
@@ -300,7 +300,7 @@ class _LoginPageState extends State<LoginPage> {
                   <p>รหัสสำหรับเข้าสู่ระบบของคุณคือ:</p>
                   <h1 style="color: #2196F3; font-size: 32px; letter-spacing: 5px;">$otp</h1>
                   <p style="color: #888;">นำรหัสนี้ไปกรอกในแอปพลิเคชัน BLE</p>
-                  <p style="color: red; font-weight: bold;">*รหัสนี้มีอายุการใช้งาน 30 วินาที*</p>
+                  <p style="color: red; font-weight: bold;">*รหัสนี้มีอายุการใช้งาน 60 วินาที*</p>
                 </div>
               """;
 
