@@ -37,6 +37,9 @@ class MainActivity : FlutterActivity() {
     // รหัสสำหรับขอ Permission
     private val PERMISSION_REQUEST_CODE = 1001
 
+    // รหัสสำหรับขอสิทธิ์แสดง Notification (จำเป็นตั้งแต่ Android 13 / API 33)
+    private val NOTIFICATION_PERMISSION_REQUEST_CODE = 1002
+
     // รหัสสำหรับขอเปิด Bluetooth
     private val ENABLE_BT_REQUEST = 2001
 
@@ -167,6 +170,8 @@ class MainActivity : FlutterActivity() {
 
     // เริ่ม Advertising
     private fun startAdvertising(args: Map<String, Any>) {
+        startBackgroundService()
+        ensureNotificationPermission()
         val manager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val adapter = manager.adapter
         advertiser = adapter.bluetoothLeAdvertiser
@@ -203,9 +208,29 @@ class MainActivity : FlutterActivity() {
         advertiser?.startAdvertising(settings, data, advertiseCallback)
     }
 
+    // ตรวจสอบและขอสิทธิ์แสดง Notification (Android 13 / API 33 ขึ้นไปเท่านั้น)
+    // ถ้าไม่ขอ/ผู้ใช้ไม่อนุญาต service ยังทำงานได้ปกติ เพียงแต่ notification จะไม่แสดงบนแถบแจ้งเตือน
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!granted) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    NOTIFICATION_PERMISSION_REQUEST_CODE
+                )
+            }
+        }
+    }
+
     // หยุด Advertising
     private fun stopAdvertising() {
         advertiser?.stopAdvertising(advertiseCallback)
+        stopBackgroundService()
     }
 
     // Callback สำหรับรับผลลัพธ์การส่งสัญญาณ
@@ -225,5 +250,19 @@ class MainActivity : FlutterActivity() {
 
     private fun stringToByteArray(keyString: String): ByteArray {
         return keyString.hexToByteArray()
+    }
+
+    private fun startBackgroundService() {
+        val serviceIntent = Intent(this, BleAdvertisingService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+    }
+
+    private fun stopBackgroundService() {
+        val serviceIntent = Intent(this, BleAdvertisingService::class.java)
+        stopService(serviceIntent)
     }
 }
