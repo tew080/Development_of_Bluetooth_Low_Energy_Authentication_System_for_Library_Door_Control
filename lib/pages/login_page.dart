@@ -69,22 +69,39 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _pickEmailAndSendOtp() async {
     GoogleSignInAccount? account;
     final studentId = studentIdCtrl.text.replaceAll(RegExp(r'\s+'), '');
+
+    if (studentId.isEmpty) {
+      setState(() {
+        error = '*กรุณากรอกรหัสนักศึกษา*';
+        loading = false;
+        studentIdCtrl.clear();
+      });
+      return;
+    }
+
     final userCheck = await firestoreService.getUser(studentId);
-    emaillCheck = userCheck['email'];
 
     if (!userCheck.exists) {
       setState(() {
         error = '*ไม่พบข้อมูลผู้ใช้*';
         studentIdCtrl.clear();
       });
-      // จบการทำงานทันทีถ้าข้อมูลว่าง
-    } else if (emaillCheck.isEmpty) {
+      return;
+    }
+
+    final userData = userCheck.data() as Map<String, dynamic>?;
+    emaillCheck = userData?['email'] ?? '';
+
+    if (emaillCheck.isEmpty) {
       setState(() {
         error = '*ไม่พบอีเมล*';
-        studentIdCtrl.clear();
-      });
-      // จบการทำงานทันทีถ้าข้อมูลว่าง
-    }
+         studentIdCtrl.clear();
+       });
+      return;
+     }
+
+    // ล้าง Session เดิม เพื่อบังคับเปิด Pop-up เลือกบัญชีใหม่เสมอ
+    await _googleSignIn.signOut();
 
     // ตรวจสอบว่าการลงชื่อเข้าใช้ด้วย Google ได้รับการเริ่มต้นแล้วหรือไม่ ถ้ายัง ให้เริ่มต้น
     if (!_isGoogleSignInInitialized) {
@@ -189,20 +206,38 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _editEmailAndSendOtp() async {
     GoogleSignInAccount? account;
     final studentId = studentIdCtrl.text.replaceAll(RegExp(r'\s+'), '');
+
+    if (studentId.isEmpty) {
+      setState(() {
+        error = '*กรุณากรอกรหัสนักศึกษา*';
+        loading = false;
+        studentIdCtrl.clear();
+      });
+      return;
+    }
+
     final userCheck = await firestoreService.getUser(studentId);
-    emaillCheck = userCheck['email'];
 
     if (!userCheck.exists) {
       setState(() {
         error = '*ไม่พบข้อมูลผู้ใช้*';
         studentIdCtrl.clear();
       });
-      // จบการทำงานทันทีถ้าข้อมูลว่าง
-    } else if (emaillCheck.isEmpty) {
-      setState(() {
-        error = '*ไม่พบอีเมล*';
-      });
+      return;
     }
+
+    final userData = userCheck.data() as Map<String, dynamic>?;
+    emaillCheck = userData?['email'] ?? '';
+
+    if (emaillCheck.isEmpty) {
+       setState(() {
+         error = '*ไม่พบอีเมล*';
+       });
+      return;
+     }
+
+    // ล้าง Session เดิม เพื่อบังคับเปิด Pop-up เลือกบัญชีใหม่เสมอ
+    await _googleSignIn.signOut();
 
     // ตรวจสอบว่าการลงชื่อเข้าใช้ด้วย Google ได้รับการเริ่มต้นแล้วหรือไม่ ถ้ายัง ให้เริ่มต้น
     if (!_isGoogleSignInInitialized) {

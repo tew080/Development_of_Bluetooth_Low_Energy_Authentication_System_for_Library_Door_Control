@@ -23,13 +23,19 @@ class AuthenticationService {
     // เรียกดึงข้อมูล User จาก Firestore ตาม studentId
     final doc = await firestoreService.getUser(studentId);
     int dataTimr = DateTime.now().millisecondsSinceEpoch;
+
     // ตรวจสอบว่ามีเอกสาร (Document) นี้อยู่ในฐานข้อมูลหรือไม่
-    if (!doc.exists ||
-        doc['current_otp'].isEmpty ||
-        otp != doc['current_otp'] ||
-        dataTimr > expiryTime) {
+    if (!doc.exists) {
+      log("ไม่พบข้อมูลผู้ใช้");
+      return false;
+    }
+
+    final data = doc.data() as Map<String, dynamic>?;
+    String dbOtp = data?['current_otp'] ?? '';
+
+    if (dbOtp.isEmpty || otp != dbOtp || dataTimr > expiryTime) {
       log("otp input: $otp");
-      log("otp db: $doc['current_otp']");
+      log("otp db: $dbOtp");
       // ถ้าไม่มีข้อมูล ให้คืนค่า false (Login ไม่สำเร็จ)
       return false;
     } else {
