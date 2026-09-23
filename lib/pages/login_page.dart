@@ -226,19 +226,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    final userData = userCheck.data() as Map<String, dynamic>?;
-    emaillCheck = userData?['email'] ?? '';
-
-    if (emaillCheck.isEmpty) {
-       setState(() {
-         error = '*ไม่พบอีเมล*';
-       });
-      return;
-     }
-
-    // ล้าง Session เดิม เพื่อบังคับเปิด Pop-up เลือกบัญชีใหม่เสมอ
-    await _googleSignIn.signOut();
-
     // ตรวจสอบว่าการลงชื่อเข้าใช้ด้วย Google ได้รับการเริ่มต้นแล้วหรือไม่ ถ้ายัง ให้เริ่มต้น
     if (!_isGoogleSignInInitialized) {
       await _googleSignIn.initialize();
