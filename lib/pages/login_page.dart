@@ -423,7 +423,7 @@ class _LoginPageState extends State<LoginPage> {
                     border: Border.all(color: Colors.green.shade200),
                   ),
                   child: Text(
-                    'ส่งรหัส OTP 6 หลักไปที่เมล\n$_targetEmail\nตรวจสอบในกล่องจดหมายของคุณ',
+                    'ส่งรหัส OTP 6 หลักไปที่เมล\n${!editEmail ?  selectedEmail : newSelectedEmail}\nตรวจสอบในกล่องจดหมายของคุณ',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.green,
