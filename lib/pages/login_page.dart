@@ -72,7 +72,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (studentId.isEmpty) {
       setState(() {
-        error = '*กรุณากรอกรหัสนักศึกษา*';
+        error = '*กรุณากรอกรหัสสมาชิก*';
         loading = false;
         studentIdCtrl.clear();
       });
@@ -209,7 +209,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (studentId.isEmpty) {
       setState(() {
-        error = '*กรุณากรอกรหัสนักศึกษา*';
+        error = '*กรุณากรอกรหัสสมาชิก*';
         loading = false;
         studentIdCtrl.clear();
       });
@@ -487,7 +487,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 TextButton(
                   child: const Text(
-                    'เปลี่ยนรหัสนักศึกษา / เปลี่ยนอีเมล / ขอotpใหม่',
+                    'เปลี่ยนรหัสสมาชิก / เปลี่ยนอีเมล / ขอotpใหม่',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.red),
                   ),
