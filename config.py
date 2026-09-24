@@ -5,6 +5,7 @@ class Config:
     COOLDOWN_SECONDS = 20  # กำหนดเวลาห้ามสแกนคีย์เดิมซ้ำภายใน 20 วินาที
 
     FB_KEY_PATH = "key/studentdata-37c33-firebase-adminsdk-fbsvc-cb5aa64e79.json"
+    GEMINI_API_KEY = "key/gemini_api_key.txt"
     COLLECTION_MEMBER = "member"
     COLLECTION_ATTENDANCE = "attendance_logs"
     COLLECTION_CONFIG = "connect"

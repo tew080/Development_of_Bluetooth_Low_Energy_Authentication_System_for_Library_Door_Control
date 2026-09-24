@@ -397,18 +397,30 @@ Role: คุณคือ Senior Chief Data Scientist และ Operational Intel
 4.2 การจัดสรรทรัพยากรและดึงดูดผู้ใช้กลุ่มใหม่
 - [เสนอ]
 """
-            api_key = getattr(Config, "GEMINI_API_KEY", "")
-            if not api_key:
+            api_key_path = getattr(Config, "GEMINI_API_KEY", "")
+            if not api_key_path or not os.path.exists(api_key_path):
                 _ai_status = {
-                    "status": "error", 
-                    "message": "ไม่พบ GEMINI_API_KEY ใน Config", 
+                    "status": "error",
+                    "message": "ไม่พบไฟล์ GEMINI_API_KEY",
                     "text": ""
                 }
-                log("[ERROR] Gemini AI Error: GEMINI_API_KEY missing.")
+                log(f"[ERROR] Gemini AI Error: ไม่พบไฟล์ {api_key_path}")
+                return
+
+            # อ่านเนื้อหาจากไฟล์
+            with open(api_key_path, "r", encoding="utf-8") as f:
+                api_key = f.read().strip()
+
+            if not api_key:
+                _ai_status = {
+                    "status": "error",
+                    "message": "ไฟล์ API key ว่างเปล่า",
+                    "text": ""
+                }
+                log("[ERROR] Gemini AI Error: API key is empty.")
                 return
 
             client = genai.Client(api_key=api_key)
-            
             response_stream = client.models.generate_content_stream(
                 model='gemini-2.5-flash',
                 contents=prompt,
