@@ -71,15 +71,25 @@ def ble_detection_callback(device, advertisement_data):
     if advertisement_data.rssi < Config.RSSI_THRESHOLD:
         return
 
-    print_packet_details(device, advertisement_data)
-
     raw_data = advertisement_data.manufacturer_data.get(Config.COMPANY_ID)
     if not raw_data:
         return
 
     try:
         hex_key = raw_data.hex()
+        
+        # 🔥 เพิ่มการเช็ก Cooldown ของคีย์นี้
+        now = datetime.now()
+        if hex_key in shared_state.last_scanned_times:
+            elapsed = (now - shared_state.last_scanned_times[hex_key]).total_seconds()
+            if elapsed < Config.COOLDOWN_SECONDS:
+                # ยังอยู่ในช่วง Cooldown ห้ามสแกนซ้ำ
+                return
+
         if hex_key in shared_state.valid_keys:
+            # อัปเดตเวลาสแกนล่าสุดของคีย์นี้
+            shared_state.last_scanned_times[hex_key] = now
+
             user_info = shared_state.valid_keys[hex_key]
             asyncio.create_task(activate_door_unlock(device, hex_key, user_info))
     except Exception as e:

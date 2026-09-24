@@ -1,7 +1,8 @@
 # config.py
 class Config:
     RSSI_THRESHOLD = -66  # ระยะประมาณ 1 เมตร
-    UNLOCK_DELAY = 3
+    UNLOCK_DELAY = 5 # กำหนดเวลาหน่วงก่อนรีเซ็ตสถานะการปลดล็อก (วินาที)
+    COOLDOWN_SECONDS = 20  # กำหนดเวลาห้ามสแกนคีย์เดิมซ้ำภายใน 20 วินาที
 
     FB_KEY_PATH = "key/studentdata-37c33-firebase-adminsdk-fbsvc-cb5aa64e79.json"
     COLLECTION_MEMBER = "member"
