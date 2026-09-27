@@ -779,7 +779,8 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF1F5F9),
+        surfaceTintColor: Colors.transparent,
         foregroundColor: const Color(0xFF0F172A),
         centerTitle: true,
         title: Text(
@@ -788,7 +789,7 @@ class _LoginPageState extends State<LoginPage> {
               : (_isOtpSent ? 'ยืนยัน OTP' : 'เข้าสู่ระบบ'),
           style: const TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 18,
+            fontSize: 24,
             letterSpacing: 0.2,
           ),
         ),
