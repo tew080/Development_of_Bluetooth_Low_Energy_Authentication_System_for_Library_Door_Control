@@ -46,6 +46,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
   bool checkinoutStatus = false;
   // ตัวจัดการการดักฟังข้อมูล Firestore
   StreamSubscription? _userSubscription;
+  StreamSubscription? _userInfoSubscription;
   // สร้าง Instance ของ FirestoreService เพื่อใช้งาน
   final FirestoreService firestoreService = FirestoreService();
   // ตัวแปรเก็บชื่อผู้ใช้
@@ -61,7 +62,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
 
   @override
   void initState() {
-    _getUserInfo();
+    _subscribeUserInfo();
     super.initState();
     // ดักฟัง Callback จาก Native เมื่อเริ่มส่งสัญญาณสำเร็จ
     BleService.listenAdvertisingStarted(() {
@@ -75,17 +76,33 @@ class _AdvertisePageState extends State<AdvertisePage> {
     _generateBleKey();
   }
 
-  Future<void> _getUserInfo() async {
-    final userInfo = await firestoreService.getUser(widget.studentId);
-      userName = userInfo['first_name'].toString() + " " + userInfo['last_name'].toString();
-      userStatus = userInfo['last_status'].toString();
-      if (userStatus == "Clock-IN") {
-        userStatus = "เช็กอินแล้ว";
-      } else if (userStatus == "Clock-OUT") {
-        userStatus = "เช็กเอาต์แล้ว";
-      } else {
-        userStatus = "ไม่ทราบสถานะ";
+  void _subscribeUserInfo() {
+    _userInfoSubscription = firestoreService
+        .getUserStream(widget.studentId)
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final userInfo = snapshot.data() as Map<String, dynamic>;
+        
+        if (mounted) {
+          setState(() {
+            // อัปเดตชื่อ
+            final firstName = userInfo['first_name'] ?? '';
+            final lastName = userInfo['last_name'] ?? '';
+            userName = "$firstName $lastName".trim();
+
+            // อัปเดตสถานะเช็กอิน/เอาต์
+            final rawStatus = userInfo['last_status']?.toString();
+            if (rawStatus == "Clock-IN") {
+              userStatus = "เช็กอินแล้ว";
+            } else if (rawStatus == "Clock-OUT") {
+              userStatus = "เช็กเอาต์แล้ว";
+            } else {
+              userStatus = "ไม่ทราบสถานะ";
+            }
+          });
+        }
       }
+    });
   }
 
   Future<void> _generateBleKey() async {
@@ -129,14 +146,13 @@ class _AdvertisePageState extends State<AdvertisePage> {
   Future<void> startBurstAdvertising(String key) async {
     bool hasNet = await NetworkService.onConnectivityChanged.first;
     if (hasNet) {
-        log("มีการเชื่อมต่ออินเทอร์เน็ตอยู่ -> ตรวจสอบ CheckinoutStatus จาก Firestore");
+      log("มีการเชื่อมต่ออินเทอร์เน็ตอยู่ -> ตรวจสอบ CheckinoutStatus จาก Firestore");
       // ยกเลิก Subscription เก่า (ถ้ามี) เพื่อป้องกันการฟังซ้ำ
       _userSubscription?.cancel();
       // ตรวจสอบการอัปเดตแบบ Real-time จาก Firestore
       _userSubscription = FirestoreService()
           .getUserStream(widget.studentId)
           .listen((snapshot) async {
-        
         // ตรวจสอบว่ามีเอกสารอยู่จริงและแปลง (Cast) ข้อมูลให้เป็น Map
         if (snapshot.exists) {
           final data = snapshot.data() as Map<String, dynamic>?;
@@ -154,7 +170,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
     _bleRefreshTimer?.cancel();
     log("StopRefreshTimer");
 
-    if(!hasNet) {
+    if (!hasNet) {
       log("**** StartBurstAdvertising ****");
       log("ไม่มีการเชื่อมต่ออินเทอร์เน็ตอยู่");
 
@@ -249,6 +265,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
   Future<void> logout() async {
     _bleRefreshTimer?.cancel();
     _userSubscription?.cancel();
+    _userInfoSubscription?.cancel();
     // หยุดส่งสัญญาณ Bluetooth ทันที (สำคัญมาก)
     await BleService.stopAdvertising();
     log("Stop Advertising");
@@ -276,115 +293,372 @@ class _AdvertisePageState extends State<AdvertisePage> {
     // ป้องกัน Memory Leak แต่สำหรับการ Logout จะจัดการใน func logout() อีกที
     _bleRefreshTimer?.cancel();
     _userSubscription?.cancel();
+    _userInfoSubscription?.cancel();
     BleService.stopAdvertising();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isActive = advertising;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: Text('สวัสดีคุณ: $userName'),
-        actions: [
-          // ปุ่ม Logout มุมขวาบน
-          IconButton(
-            icon: const Icon(Icons.logout, size: 40, color: Colors.grey),
-            tooltip: 'ออกจากระบบ',
-            onPressed: () {
-              // แสดง Dialog ยืนยันการออก
-              showDialog(
-                context: context,
-                builder: (context) {
-                  return AlertDialog(
-                    title: const Text(
-                      'ยืนยันการออก',
-                      textAlign: TextAlign.center,
-                    ),
-                    content: const Text(
-                      'คุณต้องการหยุดส่งสัญญาณและออกจากระบบหรือไม่?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context); // ปิด Dialog
-                        },
-                        child: const Text('ยกเลิก'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context); // ปิด Dialog
-                          logout(); // เรียกฟังก์ชัน Logout
-                        },
-                        child: const Text(
-                          'ออกจากระบบ',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        centerTitle: false,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // เช็คสถานะการส่งสัญญาณเพื่อแสดง UI ที่เหมาะสม
-            if (advertising) ...[
-              const Icon(
-                Icons.bluetooth_connected,
-                size: 200,
-                color: Colors.blueAccent,
+            const Text(
+              'สวัสดี',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: 20),
-              // แสดง Key
-              Text(
-                'กำลังส่งสัญญาณ\nคีย์: $currentKey\nสถานะ: $userStatus',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18, color: Colors.green),
-              ),
-              const SizedBox(height: 10),
-            ] else ...[
-              // แสดงไอคอนหยุด
-              const Icon(
-                Icons.bluetooth_disabled,
-                size: 200,
-                color: Colors.grey,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'ยังไม่เริ่มทำงาน\nคีย์: $currentKey\nสถานะ: $userStatus',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ],
-            const SizedBox(height: 10),
-            // ปุ่ม Start/Stop
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: advertising ? Colors.red : Colors.blue,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 15,
-                ),
-              ),
-              onPressed: () {
-                // สลับสถานะการทำงาน
-                if (advertising) {
-                  stop();
-                } else {
-                  startBurstAdvertising(currentKey);
-                }
-              },
-              child: Text(
-                advertising ? 'หยุดส่งสัญญาณ' : 'เริ่มส่งสัญญาณ',
-                style: const TextStyle(fontSize: 19, color: Colors.white),
+            ),
+            Text(
+              userName.isEmpty ? '...' : userName,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
               ),
             ),
           ],
+        ),
+        actions: [
+          // ปุ่ม Logout มุมขวาบน
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  size: 22,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              tooltip: 'ออกจากระบบ',
+              onPressed: () {
+                // แสดง Dialog ยืนยันการออก
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: const Text(
+                        'ยืนยันการออกจากระบบ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                        ),
+                      ),
+                      content: const Text(
+                        'คุณต้องการหยุดส่งสัญญาณและออกจากระบบหรือไม่?',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF475569),
+                          height: 1.4,
+                        ),
+                      ),
+                      actionsAlignment: MainAxisAlignment.center,
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context); // ปิด Dialog
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF64748B),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          child: const Text(
+                            'ยกเลิก',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context); // ปิด Dialog
+                            logout(); // เรียกฟังก์ชัน Logout
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'ออกจากระบบ',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ---------- Status Circle ----------
+                Container(
+                  width: 160,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isActive
+                        ? const Color(0xFFEFF6FF)
+                        : const Color(0xFFF1F5F9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isActive
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF94A3B8))
+                            .withOpacity(0.18),
+                        blurRadius: 32,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isActive
+                        ? Icons.bluetooth_connected_rounded
+                        : Icons.bluetooth_disabled_rounded,
+                    size: 80,
+                    color: isActive
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // ---------- Status Label ----------
+                Text(
+                  isActive ? 'กำลังส่งสัญญาณ' : 'ยังไม่เริ่มทำงาน',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: isActive
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isActive
+                      ? 'อุปกรณ์พร้อมให้ระบบสแกน'
+                      : 'กดปุ่มด้านล่างเพื่อเริ่มส่งสัญญาณ',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // ---------- Info Cards ----------
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Key Row
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.key_rounded,
+                              color: Color(0xFF2563EB),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'คีย์ BLE',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  currentKey.isEmpty ? '—' : currentKey,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A),
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      ),
+                      // Status Row
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: userStatus == "เช็กอินแล้ว"
+                                  ? const Color(0xFFECFDF5)
+                                  : const Color(0xFFFFF7ED),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              userStatus == "เช็กอินแล้ว"
+                                  ? Icons.check_circle_rounded
+                                  : Icons.access_time_rounded,
+                              color: userStatus == "เช็กอินแล้ว"
+                                  ? const Color(0xFF059669)
+                                  : const Color(0xFFEA580C),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'สถานะเช็กอิน/เอาต์',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  userStatus.isEmpty ? '—' : userStatus,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: userStatus == "เช็กอินแล้ว"
+                                        ? const Color(0xFF059669)
+                                        : const Color(0xFF0F172A)  ,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // ---------- Action Button ----------
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isActive
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () {
+                      // สลับสถานะการทำงาน
+                      if (advertising) {
+                        stop();
+                      } else {
+                        startBurstAdvertising(currentKey);
+                      }
+                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isActive
+                              ? Icons.stop_circle_rounded
+                              : Icons.play_circle_rounded,
+                          size: 26,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          isActive ? 'หยุดส่งสัญญาณ' : 'เริ่มส่งสัญญาณ',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'รหัสสมาชิก: ${widget.studentId}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

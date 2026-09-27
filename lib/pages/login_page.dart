@@ -15,6 +15,9 @@ import '../services/generatekey_service.dart';
 // นำเข้า FirestoreService
 import '../services/firestore_service.dart';
 
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -60,11 +63,25 @@ class _LoginPageState extends State<LoginPage> {
   // เส้นทางอีเมลที่ต้องการตรวจสอบ (ในกรณีที่ต้องการใช้อีเมลของมหาวิทยาลัย)
   String targetEmail = '@student.sru.ac.th';
 
+  // State สำหรับโหมดลงทะเบียนบุคคลภายนอก
+  bool isRegisterGuest = false;
+  String _generatedEpId = '';
+  String _tempOtp = '';
+  int _tempOtpExpiry = 0;
+
   String targetID = 'ep';
   // รับค่าจาก รหัสนักศึกษาจาก TextField
   final studentIdCtrl = TextEditingController();
   // รับค่าจาก รหัสนักศึกษาจาก TextField
   final otpCtrl = TextEditingController();
+
+  // Controllers ใหม่สำหรับบุคคลภายนอก
+  String? _selectedPrefix; // ตัวแปรเก็บค่าคำนำหน้าที่เลือก
+  final List<String> _prefixOptions = ['นาย', 'นาง', 'นางสาว']; // ตัวเลือกคำนำหน้า
+  final firstNameCtrl = TextEditingController();
+  final lastNameCtrl = TextEditingController();
+  final branchCtrl = TextEditingController();
+  final emailCtrl = TextEditingController();
 
   Future<void> _pickEmailAndSendOtp() async {
     GoogleSignInAccount? account;
@@ -95,10 +112,10 @@ class _LoginPageState extends State<LoginPage> {
     if (emaillCheck.isEmpty) {
       setState(() {
         error = '*ไม่พบอีเมล*';
-         studentIdCtrl.clear();
-       });
+        studentIdCtrl.clear();
+      });
       return;
-     }
+    }
 
     // ล้าง Session เดิม เพื่อบังคับเปิด Pop-up เลือกบัญชีใหม่เสมอ
     await _googleSignIn.signOut();
@@ -203,6 +220,87 @@ class _LoginPageState extends State<LoginPage> {
     await _googleSignIn.signOut();
   }
 
+  Future<void> _registerGuestAndSendOtp() async {
+    final firstName = firstNameCtrl.text.trim();
+    final lastName = lastNameCtrl.text.trim();
+    final email = emailCtrl.text.trim();
+
+    // 1. ตรวจสอบว่าเลือกคำนำหน้าหรือยัง
+    if (_selectedPrefix == null || _selectedPrefix!.isEmpty) {
+      setState(() => error = '*กรุณาเลือกคำนำหน้า*');
+      return;
+    }
+
+    // 2. ตรวจสอบว่ากรอกฟิลด์บังคับครบหรือไม่
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty) {
+      setState(() => error = '*กรุณากรอกข้อมูลที่บังคับให้ครบถ้วน*');
+      return;
+    }
+
+    // 3. ตรวจสอบประเภทข้อมูล ชื่อ-นามสกุล (ต้องเป็นตัวอักษรเท่านั้น ห้ามมีตัวเลขหรืออักขระพิเศษ)
+    if (!RegExp(r"^[a-zA-Zก-๙\s]+$").hasMatch(firstName) ||
+        !RegExp(r"^[a-zA-Zก-๙\s]+$").hasMatch(lastName)) {
+      setState(() => error = '*ชื่อและนามสกุลต้องเป็นตัวอักษรเท่านั้น*');
+      return;
+    }
+
+    // 4. ตรวจสอบรูปแบบอีเมล
+    if (!RegExp(
+            r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9-]+\.[a-zA-Z]+")
+        .hasMatch(email)) {
+      setState(() => error = '*รูปแบบอีเมลไม่ถูกต้อง*');
+      return;
+    }
+
+    setState(() {
+      loading = true;
+      error = '';
+    });
+
+    // สุ่มรหัสผู้ใช้งาน epXXXX
+    final randomDigits = Random().nextInt(10000).toString().padLeft(4, '0');
+    _generatedEpId = 'ep$randomDigits';
+
+    // สร้าง OTP
+    _tempOtp = generateKey(6, "otp");
+    _tempOtpExpiry =
+        DateTime.now().add(const Duration(seconds: 60)).millisecondsSinceEpoch;
+
+    try {
+      final doc = await firestoreService.getEmailAdmin();
+      _systemEmail = doc['email'];
+      _systemAppPassword = doc['emailAppPassword'];
+
+      final smtpServer = gmail(_systemEmail, _systemAppPassword);
+      final message = Message()
+        ..from = Address(_systemEmail, 'ระบบลงทะเบียนเข้าใช้แอพ BLE')
+        ..recipients.add(email)
+        ..subject = 'รหัส OTP สำหรับลงทะเบียนของคุณคือ: $_tempOtp'
+        ..html = """
+             <div style="font-family: sans-serif; padding: 20px;">
+               <h2>รหัสยืนยันการลงทะเบียน (OTP)</h2>
+               <p>รหัสสำหรับการลงทะเบียนของคุณคือ:</p>
+               <h1 style="color: #2196F3; font-size: 32px; letter-spacing: 5px;">$_tempOtp</h1>
+               <p style="color: #888;">นำรหัสนี้ไปกรอกในแอปพลิเคชัน BLE</p>
+               <p style="color: red; font-weight: bold;">*รหัสนี้มีอายุการใช้งาน 60 วินาที*</p>
+             </div>
+           """;
+
+      await send(message, smtpServer);
+
+      setState(() {
+        _isOtpSent = true;
+        _targetEmail = email;
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = 'เกิดข้อผิดพลาดในการส่งอีเมล: $e';
+        loading = false;
+      });
+    }
+  }
+
   Future<void> _editEmailAndSendOtp() async {
     GoogleSignInAccount? account;
     final studentId = studentIdCtrl.text.replaceAll(RegExp(r'\s+'), '');
@@ -241,11 +339,12 @@ class _LoginPageState extends State<LoginPage> {
     // ตรวจสอบว่ารหัสผู้ใช้งานขึ้นต้นด้วย 'ep' (บุคคลภายนอก) หรือไม่
     if (!studentId.trim().toLowerCase().startsWith(targetID)) {
       setState(() {
-        error = '*กรุณาใช้รหัสผู้ใช้งานสำหรับบุคคลภายนอก (เช่น epXXXXX) เท่านั้น*';
+        error =
+            '*กรุณาใช้รหัสผู้ใช้งานสำหรับบุคคลภายนอก (เช่น epXXXXX) เท่านั้น*';
         loading = false;
       });
       // หมายเหตุ: หากบุคคลภายนอกไม่ได้ล็อกอินผ่าน Google Sign-in สามารถลบบรรทัด signOut() ออกได้
-      await _googleSignIn.signOut(); 
+      await _googleSignIn.signOut();
       return; // จบการทำงานทันที
     }
 
@@ -334,8 +433,8 @@ class _LoginPageState extends State<LoginPage> {
       error = '';
       // ตั้งค่าว่า OTP ถูกส่งแล้ว
       _isOtpSent = true;
-      // ตั้งค่าอีเมลเป้าหมาย
-      _targetEmail = selectedEmail;
+      // ตั้งค่าอีเมลเป้าหมายให้ตรงกับความเป็นจริง (ถ้าอีเมลเก่าว่างให้แสดงอีเมลใหม่, ถ้าไม่ว่างให้แสดงอีเมลเก่า)
+      _targetEmail = selectedEmail.isEmpty ? newSelectedEmail : selectedEmail;
       // ปิดสถานะการโหลด
       loading = false;
     });
@@ -345,7 +444,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _verifyOtp() async {
-    final studentId = studentIdCtrl.text.replaceAll(RegExp(r'\s+'), '');
     final inputOtp = otpCtrl.text.replaceAll(RegExp(r'\s+'), '');
     if (inputOtp.isEmpty || inputOtp.length != 6) {
       setState(() {
@@ -359,6 +457,162 @@ class _LoginPageState extends State<LoginPage> {
       loading = true;
     });
 
+    // กรณีลงทะเบียนบุคคลภายนอก
+    if (isRegisterGuest) {
+      if (inputOtp == _tempOtp &&
+          DateTime.now().millisecondsSinceEpoch < _tempOtpExpiry) {
+        try {
+          // บันทึกข้อมูลลง Firestore (บันทึก _selectedPrefix แทนตัวเดิม)
+          await FirebaseFirestore.instance
+              .collection('member')
+              .doc(_generatedEpId)
+              .set({
+            'member_id': _generatedEpId,
+            'prefix': _selectedPrefix,
+            'first_name': firstNameCtrl.text.trim(),
+            'last_name': lastNameCtrl.text.trim(),
+            'faculty': 'บุคคลภายนอก',
+            'branch': branchCtrl.text.trim(),
+            'email': emailCtrl.text.trim(),
+            'key': '',
+            'loginStatus': true,
+            'last_status': 'Clock-OUT',
+            'last_update_date': '',
+            'last_update_time': '',
+            'current_otp': '',
+            'otp_expiry': 0,
+          });
+
+          log("ลงทะเบียนและยืนยัน OTP สำเร็จ รหัส: $_generatedEpId");
+          if (mounted) {
+            setState(() {
+              loading = false; // ปิดสถานะโหลดก่อนโชว์ Dialog
+            });
+
+            // แสดง Dialog แจ้งรหัสสมาชิกและให้แคปหน้าจอ
+            showDialog(
+              context: context,
+              barrierDismissible: false, // บังคับให้ผู้ใช้ต้องกดปุ่มตกลง
+              builder: (BuildContext dialogContext) {
+                return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  title: const Column(
+                    children: [
+                      Icon(Icons.check_circle_rounded,
+                          color: Color(0xFF2E7D32), size: 64),
+                      SizedBox(height: 12),
+                      Text(
+                        'ลงทะเบียนสำเร็จ!',
+                        style: TextStyle(
+                          color: Color(0xFF2E7D32),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'รหัสสมาชิกสำหรับเข้าสู่ระบบของคุณคือ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 15, color: Colors.black87),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE3F2FD),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF90CAF9)),
+                        ),
+                        child: SelectableText(
+                          _generatedEpId,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                            letterSpacing: 3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          '⚠️ แนะนำให้แคปหน้าจอหน้านี้เอาไว้\nเพื่อใช้เป็นรหัสในการเข้าสู่ระบบครั้งต่อไป',
+                          style: TextStyle(
+                            color: Color(0xFFE65100),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    Center(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1565C0),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(180, 48),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'ตกลง / เข้าสู่ระบบ',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(dialogContext); // ปิด Dialog
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    AdvertisePage(studentId: _generatedEpId)),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+        } catch (e) {
+          setState(() {
+            loading = false;
+            error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e';
+          });
+        }
+      } else {
+        setState(() {
+          loading = false;
+          error = '*รหัส OTP ไม่ถูกต้องหรือหมดอายุ*';
+          otpCtrl.clear();
+        });
+      }
+      return;
+    }
+
+    // กรณี Login สมาชิกเดิม
+    final studentId = studentIdCtrl.text.replaceAll(RegExp(r'\s+'), '');
     final bool isSuccess = await AuthenticationService.login(
       studentId,
       inputOtp,
@@ -398,195 +652,580 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // ---------- UI Helpers (ไม่กระทบ Logic) ----------
+  InputDecoration _inputDecoration({
+    required String label,
+    IconData? prefixIcon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: prefixIcon != null
+          ? Icon(prefixIcon, color: const Color(0xFF64748B), size: 22)
+          : null,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
+      labelStyle: const TextStyle(
+        color: Color(0xFF64748B),
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildPrimaryButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool isLoading = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: isLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.4,
+                ),
+              )
+            : Icon(icon, size: 22),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2563EB),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFF94A3B8),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecondaryButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool isLoading = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF2563EB),
+                  strokeWidth: 2.2,
+                ),
+              )
+            : Icon(icon, size: 20),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF2563EB),
+          side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isOtpSent ? 'ยืนยัน OTP' : 'เข้าสู่ระบบ')),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(64),
+      backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        centerTitle: true,
+        title: Text(
+          isRegisterGuest
+              ? 'ลงทะเบียนบุคคลภายนอก'
+              : (_isOtpSent ? 'ยืนยัน OTP' : 'เข้าสู่ระบบ'),
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            letterSpacing: 0.2,
+          ),
+        ),
+        leading: isRegisterGuest
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: () => setState(() {
+                  isRegisterGuest = false;
+                  _isOtpSent = false;
+                  error = '';
+                }),
+              )
+            : null,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(
-                _isOtpSent ? Icons.mark_email_read : Icons.account_circle,
-                size: 200,
-                color: _isOtpSent ? Colors.green : Colors.blue,
-              ),
-              const SizedBox(height: 30),
-              if (_isOtpSent) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
+              // ---------- Header Icon + Title ----------
+              Center(
+                child: Container(
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.shade200),
+                    color: _isOtpSent
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFEFF6FF),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isOtpSent
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF2563EB))
+                            .withOpacity(0.12),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    'ส่งรหัส OTP 6 หลักไปที่เมล\n${!editEmail ?  selectedEmail : newSelectedEmail}\nตรวจสอบในกล่องจดหมายของคุณ',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Icon(
+                    _isOtpSent
+                        ? Icons.mark_email_read_rounded
+                        : Icons.account_circle_rounded,
+                    size: 64,
+                    color: _isOtpSent
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF2563EB),
                   ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              // TextField (), สร้างช่องรับค่าข้อมูล
-              TextField(
-                // ให้ TextField รับค่าจาก _isOtpSent
-                enabled: !_isOtpSent,
-                // ให้ TextField รับค่าจาก studentIdCtrl
-                controller: studentIdCtrl,
-                textAlign: TextAlign.center,
-                maxLength: 15,
-                // รับค่าเป็นตัวเลขเท่านั้น
-                //keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'รหัสสมาชิก',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person, color: Colors.grey),
-                ),
-                style: const TextStyle(
-                  color: Colors.black,
-                  // กำหนดขนาดของตัวอักษร
-                  fontSize: 18,
-                  // กำหนดระยะห่างระหว่างตัวอักษร
-                  letterSpacing: 1.5,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 28),
 
-              if (_isOtpSent) ...[
-                TextField(
-                  controller: otpCtrl,
-                  // รับค่าเป็นตัวเลขเท่านั้น
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                  decoration: const InputDecoration(
-                    labelText: 'รหัส OTP 6 หลัก',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.password_sharp, color: Colors.grey),
-                  ),
+              // ---------- Main Card ----------
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  child: const Text(
-                    'เปลี่ยนรหัสสมาชิก / เปลี่ยนอีเมล / ขอotpใหม่',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      pickEmail = false;
-                      editEmail = false;
-                      _isOtpSent = false;
-                      otpCtrl.clear();
-                      error = '';
-                    });
-                  },
-                ),
-              ],
-              // ถ้า ค่าในตัวแปล error ไม่เป็นค่าว่าง แสดงว่ามีข้อผิดพลาด จาก setState();
-              if (error.isNotEmpty)
-                Text(
-                  error,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    // กำหนดขนาดของตัวอักษร
-                    fontSize: 16,
-                    // กำหนดความหนาของตัวอักษร
-                    fontWeight: FontWeight.bold,
-                    // กำหนดระยะห่างระหว่างตัวอักษร
-                    letterSpacing: 1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              const SizedBox(height: 10),
-              if (!editEmail) ...[
-                ElevatedButton.icon(
-                  label: Text(
-                    _isOtpSent
-                        ? 'ยืนยัน OTP เพื่อเข้าสู่ระบบ'
-                        : 'เลือกอีเมลเพื่อรับOTP',
-                    style: const TextStyle(fontSize: 15),
-                  ),
-                  onPressed: loading
-                      ? null
-                      : (_isOtpSent ? _verifyOtp : _pickEmailAndSendOtp),
-                  icon: loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.red,
-                            strokeWidth: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_isOtpSent) ...[
+                      // OTP Sent Banner
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFA7F3D0),
                           ),
-                        )
-                      : Icon(_isOtpSent ? Icons.login : Icons.email),
-                  // กำหนดสไตล์ของปุ่ม
-                  style: ElevatedButton.styleFrom(
-                    // สีพื้นหลังของปุ่ม
-                    backgroundColor: Colors.blue,
-                    // สีเบื้องหน้าของปุ่ม
-                    foregroundColor: Colors.white,
-                    // กำหนดขนาดของปุ่ม
-                    minimumSize: Size(200, 50),
-                    shape: RoundedRectangleBorder(
-                      // กำหนดขอบของปุ่ม
-                      //side: BorderSide(color: Colors.indigoAccent, width: 2),
-                      // กำหนดความโค้งของขอบปุ่ม
-                      borderRadius: BorderRadius.circular(30.0),
-                    ), //End RoundedRectangleBorder
-                  ), //End ElevatedButton.styleFrom
-                ), // End ElevatedButton
-              ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_outline_rounded,
+                              color: Color(0xFF059669),
+                              size: 28,
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'ส่งรหัส OTP 6 หลักไปที่',
+                              style: TextStyle(
+                                color: Color(0xFF047857),
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _targetEmail,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'กรุณาตรวจสอบในกล่องจดหมายของคุณ',
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: otpCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          letterSpacing: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                        decoration: _inputDecoration(
+                          label: 'รหัส OTP 6 หลัก',
+                          prefixIcon: Icons.password_rounded,
+                        ).copyWith(
+                          counterText: '',
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 18),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            pickEmail = false;
+                            editEmail = false;
+                            _isOtpSent = false;
+                            otpCtrl.clear();
+                            error = '';
+                          });
+                        },
+                        child: Text(
+                          isRegisterGuest
+                              ? 'แก้ไขข้อมูล / ขอ OTP ใหม่'
+                              : 'เปลี่ยนรหัสสมาชิก / เปลี่ยนอีเมล / ขอ OTP ใหม่',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+                    ] else if (isRegisterGuest) ...[
+                      // Guest Registration Form
+                      const Text(
+                        'กรอกข้อมูลเพื่อลงทะเบียน',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'ข้อมูลที่มีเครื่องหมาย * เป็นข้อมูลบังคับ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        decoration: _inputDecoration(
+                          label: 'คำนำหน้า *',
+                          prefixIcon: Icons.badge_outlined,
+                        ),
+                        value: _selectedPrefix,
+                        items: _prefixOptions.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (newValue) {
+                          setState(() {
+                            _selectedPrefix = newValue;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: firstNameCtrl,
+                        decoration: _inputDecoration(
+                          label: 'ชื่อ *',
+                          prefixIcon: Icons.person_outline_rounded,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: lastNameCtrl,
+                        decoration: _inputDecoration(
+                          label: 'นามสกุล *',
+                          prefixIcon: Icons.person_outline_rounded,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: branchCtrl,
+                        decoration: _inputDecoration(
+                          label: 'หน่วยงาน (ไม่บังคับ)',
+                          prefixIcon: Icons.business_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: _inputDecoration(
+                          label: 'อีเมลสำหรับรับ OTP *',
+                          prefixIcon: Icons.email_outlined,
+                        ),
+                      ),
+                    ] else ...[
+                      // Login Form
+                      const Text(
+                        'กรอกรหัสสมาชิกเพื่อเข้าสู่ระบบ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'ใช้รหัสนักศึกษา หรือรหัสบุคคลภายนอก (epXXXX)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        enabled: !_isOtpSent,
+                        controller: studentIdCtrl,
+                        textAlign: TextAlign.center,
+                        maxLength: 15,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 18,
+                          letterSpacing: 1.8,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        decoration: _inputDecoration(
+                          label: 'รหัสสมาชิก',
+                          prefixIcon: Icons.badge_outlined,
+                        ).copyWith(counterText: ''),
+                      ),
+                    ],
 
-              if (!pickEmail) ...[
-                const SizedBox(height: 10),
-                ElevatedButton.icon(
-                  label: Text(
-                    _isOtpSent
-                        ? 'ยืนยัน OTP เพื่อเข้าสู่ระบบ'
-                        : 'ผูกหรือเปลี่ยนอีเมล',
-                    style: const TextStyle(fontSize: 15),
-                  ),
-                  onPressed: loading
-                      ? null
-                      : (_isOtpSent ? _verifyOtp : _editEmailAndSendOtp),
-                  icon: loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.red,
-                            strokeWidth: 2,
+                    // ---------- Error Message ----------
+                    if (error.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: Color(0xFFDC2626),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                error,
+                                style: const TextStyle(
+                                  color: Color(0xFFB91C1C),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 24),
+
+                    // ---------- Action Buttons ----------
+                    if (isRegisterGuest) ...[
+                      _buildPrimaryButton(
+                        label: _isOtpSent
+                            ? 'ยืนยัน OTP เพื่อลงทะเบียน'
+                            : 'ขอรับรหัส OTP',
+                        icon: _isOtpSent
+                            ? Icons.login_rounded
+                            : Icons.email_outlined,
+                        isLoading: loading,
+                        onPressed: loading
+                            ? null
+                            : (_isOtpSent
+                                ? _verifyOtp
+                                : _registerGuestAndSendOtp),
+                      ),
+                    ] else ...[
+                      if (!editEmail || _isOtpSent) ...[
+                        _buildPrimaryButton(
+                          label: _isOtpSent
+                              ? (editEmail
+                                  ? 'ยืนยัน OTP เพื่อเปลี่ยนอีเมล'
+                                  : 'ยืนยัน OTP เพื่อเข้าสู่ระบบ')
+                              : 'เลือกอีเมลเพื่อรับ OTP',
+                          icon: _isOtpSent
+                              ? Icons.login_rounded
+                              : Icons.email_outlined,
+                          isLoading: loading,
+                          onPressed: loading
+                              ? null
+                              : (_isOtpSent
+                                  ? _verifyOtp
+                                  : _pickEmailAndSendOtp),
+                        ),
+                      ],
+                      if (!pickEmail && !_isOtpSent) ...[
+                        const SizedBox(height: 12),
+                        _buildSecondaryButton(
+                          label: 'เปลี่ยนอีเมล',
+                          icon: Icons.edit_outlined,
+                          isLoading: loading,
+                          onPressed: loading ? null : _editEmailAndSendOtp,
+                        ),
+                        const SizedBox(height: 28),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.shade300,
+                                thickness: 1,
+                              ),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'หรือ',
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.shade300,
+                                thickness: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: TextButton.icon(
+                            onPressed: () => setState(() {
+                              isRegisterGuest = true;
+                              error = '';
+                              _isOtpSent = false;
+                            }),
+                            icon: const Icon(
+                              Icons.person_add_alt_1_rounded,
+                              color: Color(0xFF059669),
+                              size: 22,
+                            ),
+                            label: const Text(
+                              'สำหรับบุคคลภายนอก (ลงทะเบียน)',
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              backgroundColor: const Color(0xFFECFDF5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: const BorderSide(
+                                  color: Color(0xFFA7F3D0)  ,
+                                ),
+                              ),
+                            ),
                           ),
-                        )
-                      : Icon(_isOtpSent ? Icons.login : Icons.email),
-                  // กำหนดสไตล์ของปุ่ม
-                  style: ElevatedButton.styleFrom(
-                    // สีพื้นหลังของปุ่ม
-                    backgroundColor: Colors.blue,
-                    // สีเบื้องหน้าของปุ่ม
-                    foregroundColor: Colors.white,
-                    // กำหนดขนาดของปุ่ม
-                    minimumSize: Size(200, 50),
-                    shape: RoundedRectangleBorder(
-                      // กำหนดขอบของปุ่ม
-                      //side: BorderSide(color: Colors.indigoAccent, width: 2),
-                      // กำหนดความโค้งของขอบปุ่ม
-                      borderRadius: BorderRadius.circular(30.0),
-                    ), //End RoundedRectangleBorder
-                  ), //End ElevatedButton.styleFrom
-                ), // End ElevatedButton
-              ],
-            ], // End Row
-          ), // End Column
-        ), // End Container
-      ), // End SingleChildScrollView
-    ); // End Scaffold
-  } // End Widget build
-} // End Class LoginPage
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+              // Footer
+              const Center(
+                child: Text(
+                  'ระบบยืนยันตัวตนเข้าใช้แอป BLE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
