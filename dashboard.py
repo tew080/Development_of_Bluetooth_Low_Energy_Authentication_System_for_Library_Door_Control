@@ -935,41 +935,6 @@ def show_dashboard_graph():
                             </div>
                         </div>
 
-                        <!-- Top 5 Ranking Section -->
-                        <div class="glass-card p-6 w-full" id="topRankingsSection">
-                            <div class="flex justify-between items-center mb-4">
-                                <div>
-                                    <h2 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2" id="top5Title">
-                                        5 อันดับสมาชิกที่เข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)
-                                    </h2>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="top5Subtitle">จัดอันดับตามช่วงเวลาที่เลือก</p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">เรียงตาม:</label>
-                                    <select id="top5SortBy" class="form-select py-1.5 text-xs w-auto">
-                                        <option value="visits" selected>จำนวนครั้ง (เข้าใช้งาน)</option>
-                                        <option value="hours">เวลารวม (ชั่วโมง)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="table-container max-h-96 overflow-auto border border-slate-100 dark:border-slate-800 rounded-xl">
-                                <table class="w-full text-left border-collapse min-w-max">
-                                    <thead>
-                                        <tr class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm w-36">อันดับ</th>
-                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm">ชื่อ - นามสกุล</th>
-                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm" id="top5GroupHeader">คณะ</th>
-                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm text-center">เวลารวม</th>
-                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm text-right">เข้าใช้งาน</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="top5Body" class="text-sm text-slate-600 dark:text-slate-300">
-                                        <!-- JS Injected -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
                         <!-- Charts Section 1 -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="glass-card p-6 w-full" id="trendChartSection">
@@ -1007,6 +972,41 @@ def show_dashboard_graph():
                                 <div class="relative h-80 w-full">
                                     <canvas id="compareChart"></canvas>
                                 </div>
+                            </div>
+                        </div>
+
+                                                <!-- Top 5 Ranking Section -->
+                        <div class="glass-card p-6 w-full" id="topRankingsSection">
+                            <div class="flex justify-between items-center mb-4">
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2" id="top5Title">
+                                        5 อันดับสมาชิกที่เข้าใช้งานสูงสุด (ระดับมหาวิทยาลัย)
+                                    </h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="top5Subtitle">จัดอันดับตามช่วงเวลาที่เลือก</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">เรียงตาม:</label>
+                                    <select id="top5SortBy" class="form-select py-1.5 text-xs w-auto">
+                                        <option value="visits" selected>จำนวนครั้ง (เข้าใช้งาน)</option>
+                                        <option value="hours">เวลารวม (ชั่วโมง)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="table-container max-h-96 overflow-auto border border-slate-100 dark:border-slate-800 rounded-xl">
+                                <table class="w-full text-left border-collapse min-w-max">
+                                    <thead>
+                                        <tr class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm w-36">อันดับ</th>
+                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm">ชื่อ - นามสกุล</th>
+                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm" id="top5GroupHeader">คณะ</th>
+                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm text-center">เวลารวม</th>
+                                            <th class="py-3 px-4 font-bold sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm text-right">เข้าใช้งาน</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="top5Body" class="text-sm text-slate-600 dark:text-slate-300">
+                                        <!-- JS Injected -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 

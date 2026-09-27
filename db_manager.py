@@ -416,45 +416,7 @@ def update_ble_connect_config(company_id, uuid_str):
     except Exception as e:
         log(f"❌ Error updating BLE connect config: {e}")
         return False
-    
-def add_external_person(prefix, first_name, last_name, email):
-    """ฟังก์ชันเพิ่มข้อมูลบุคคลภายนอกเข้าสู่ Firestore Collection 'student'"""
-    if shared_state.db is None:
-        return False, "ระบบยังไม่ได้เชื่อมต่อกับ Firebase"
-
-    try:
-        # นับจำนวนบุคคลภายนอกเดิมเพื่อสร้าง ID รันอัตโนมัติ (เช่น ep0001)
-        docs = shared_state.db.collection(Config.COLLECTION_MEMBER)\
-            .where(filter=FieldFilter("faculty", "==", "บุคคลภายนอก")).stream()
-        count = sum(1 for _ in docs)
-        new_id = f"ep{count + 1:04d}"
-
-        external_data = {
-            "member_id": new_id,
-            "prefix": prefix.strip(),
-            "first_name": first_name.strip(),
-            "last_name": last_name.strip(),
-            "email": email.strip(),
-            "faculty": "บุคคลภายนอก",
-            "branch": "",
-            Config.FIELD_NAME: "",  # คีย์ (key) ปล่อยว่างไว้
-            "loginStatus": False,
-            "last_status": "Clock-OUT",
-            "last_update_date": "",
-            "last_update_time": ""
-        }
-
-        # บันทึกลง Firestore โดยใช้ new_id เป็น Document ID
-        doc_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(new_id)
-        doc_ref.set(external_data, merge=True)
         
-        notify_members_updated()  # บังคับรีเฟรช cache สมาชิก dashboard_data.js ทันที
-        log(f"- เพิ่มข้อมูลบุคคลภายนอกสำเร็จ ID: {new_id}")
-        return True, new_id
-    except Exception as e:
-        log(f"❌ เกิดข้อผิดพลาดในการเพิ่มบุคคลภายนอก: {e}")
-        return False, str(e)
-
 def load_local_users_cache():
     """โหลดข้อมูลผู้ใช้งานจากไฟล์แคชก่อนเชื่อมต่อฐานข้อมูล"""
     os.makedirs(Config.CACHE_DIR, exist_ok=True)

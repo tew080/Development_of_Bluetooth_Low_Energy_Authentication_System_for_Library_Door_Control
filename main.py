@@ -21,7 +21,6 @@ from db_manager import (
     update_admin_email_config,
     get_ble_connect_config,
     update_ble_connect_config,
-    add_external_person,
     add_single_student,
     get_faculties_and_branches,
     count_members_by_prefix,
@@ -228,124 +227,6 @@ def open_edit_window(parent):
 
     btn_save_st = tk.Button(st_center_frame, text="บันทึกการแก้ไขข้อมูลสมาชิก", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", cursor="hand2", command=save_student)
     btn_save_st.pack(pady=10)
-
-    # ==========================================
-    # TAB 4: เพิ่มบุคคลภายนอก (External Person)
-    # ==========================================
-    tab_external = tk.Frame(notebook, bg="#34495e")
-    notebook.add(tab_external, text=" เพิ่มบุคคลภายนอก ")
-
-    ext_center_frame = tk.Frame(tab_external, bg="#34495e")
-    ext_center_frame.pack(expand=True, fill=tk.BOTH, pady=20)
-
-    var_ext_prefix = tk.StringVar()
-    var_ext_fname = tk.StringVar()
-    var_ext_lname = tk.StringVar()
-    var_ext_email = tk.StringVar()
-    
-    form_ext = tk.Frame(ext_center_frame, bg="#34495e")
-    form_ext.pack(pady=10)
-
-    def valid_person_name(value):
-        """รับเฉพาะตัวอักษร ช่องว่าง และขีดกลางสำหรับชื่อบุคคล"""
-        return all(
-            character.isalpha()
-            or character.isspace()
-            or character == "-"
-            or unicodedata.category(character).startswith("M")
-            for character in value
-        )
-
-    name_validation = (edit_win.register(valid_person_name), "%P")
-    email_validation = (
-        edit_win.register(lambda value: not any(character.isspace() for character in value)),
-        "%P",
-    )
-
-    ext_fields = [
-        ("คำนำหน้า *:", var_ext_prefix),
-        ("ชื่อ *:", var_ext_fname),
-        ("นามสกุล *:", var_ext_lname),
-        ("อีเมล:", var_ext_email)
-    ]
-
-    for i, (label_text, var) in enumerate(ext_fields):
-        tk.Label(form_ext, text=label_text, bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=i, column=0, sticky="e", pady=8, padx=10)
-        entry_options = {
-            "font": ("Arial", 12),
-            "width": 35,
-        }
-        if i < 3:
-            entry_options.update(
-                validate="key",
-                validatecommand=name_validation,
-            )
-        else:
-            entry_options.update(
-                validate="key",
-                validatecommand=email_validation,
-            )
-        tk.Entry(form_ext, textvariable=var, **entry_options).grid(row=i, column=1, pady=8, padx=10)
-
-    lbl_external_result = tk.Label(
-        ext_center_frame,
-        text="",
-        bg="#34495e",
-        fg="#f1c40f",
-        font=("Arial", 16, "bold"),
-    )
-
-    def save_external():
-        prefix = var_ext_prefix.get().strip()
-        fname = var_ext_fname.get().strip()
-        lname = var_ext_lname.get().strip()
-        email = var_ext_email.get().strip()
-
-        missing_fields = []
-        if not prefix:
-            missing_fields.append("คำนำหน้า")
-        if not fname:
-            missing_fields.append("ชื่อ")
-        if not lname:
-            missing_fields.append("นามสกุล")
-
-        if missing_fields:
-            messagebox.showwarning(
-                "ข้อมูลไม่ครบ",
-                f"กรุณากรอก: {', '.join(missing_fields)}",
-            )
-            return
-
-        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-            messagebox.showwarning("รูปแบบไม่ถูกต้อง", "กรุณากรอกอีเมลให้ถูกต้อง เช่น name@example.com")
-            return
-
-        btn_save_ext.config(state="disabled", text="กำลังบันทึก...")
-
-        def save_task():
-            success, result_id = add_external_person(prefix, fname, lname, email)
-            
-            def update_ui():
-                btn_save_ext.config(state="normal", text="บันทึกข้อมูลบุคคลภายนอก")
-                if success:
-                    lbl_external_result.config(
-                        text=f"บันทึกสำเร็จ\nรหัสสมาชิกภายนอก: {result_id}",
-                        fg="#f1c40f",
-                    )
-                    lbl_external_result.pack(pady=(5, 0))
-                    var_ext_prefix.set("")
-                    var_ext_fname.set("")
-                    var_ext_lname.set("")
-                    var_ext_email.set("")
-                else:
-                    messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถบันทึกได้: {result_id}")
-
-            edit_win.after(0, update_ui)
-
-        threading.Thread(target=save_task, daemon=True).start()
-
-    btn_save_ext = tk.Button(ext_center_frame, text="บันทึกข้อมูลบุคคลภายนอก", font=("Arial", 14, "bold"), bg="#27ae60", fg="white", command=save_external)
-    btn_save_ext.pack(pady=20)
     
     # ==========================================
     # TAB: เพิ่มนักศึกษารายบุคคล (Add Single Student)
@@ -380,6 +261,11 @@ def open_edit_window(parent):
         "%P"
     )
 
+    name_validation = (
+        edit_win.register(lambda val: bool(re.fullmatch(r"[\u0E00-\u0E7FA-Za-z\s]*", val))),
+        "%P"
+    )
+    
     # 1. รหัสนักศึกษา
     tk.Label(form_add_st, text="รหัสนักศึกษา *:", bg="#34495e", font=("Arial", 12, "bold"), fg="#ecf0f1").grid(row=0, column=0, sticky="e", pady=6, padx=10)
     tk.Entry(form_add_st, textvariable=var_add_st_id, font=("Arial", 12), width=35, validate="key", validatecommand=digit_validation).grid(row=0, column=1, pady=6, padx=10)
