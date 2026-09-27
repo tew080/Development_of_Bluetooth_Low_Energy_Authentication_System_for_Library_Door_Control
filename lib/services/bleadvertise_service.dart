@@ -4,67 +4,141 @@ import 'package:flutter/services.dart';
 import '../services/logdebug_service.dart';
 // นำเข้า FirestoreService
 import 'firestore_service.dart';
+// นำเข้า Flutter Secure Storage สำหรับ cache config ออฟไลน์
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // คลาสสำหรับจัดการ Bluetooth Low Energy (BLE) ผ่าน Native Code
 class BleService {
   // สร้างช่องทางสื่อสาร (Channel) ชื่อ 'ble_advertiser' ให้ตรงกับฝั่ง Android (Native Code)
   static const MethodChannel channel = MethodChannel('ble_advertiser');
 
-  // รับค่า bleKey ที่ต้องการส่ง
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  // Cache ใน memory เพื่อความเร็ว (ไม่ต้องอ่าน storage ทุกครั้ง)
+  static String? _cachedUuid;
+  static int? _cachedCompanyId;
+
+  /// โหลด UUID + CompanyID จาก cache หรือ Firestore (ถ้าออนไลน์)
+  /// คืนค่า (uuid, companyId) หรือ null ถ้าไม่มีข้อมูลเลย
+  static Future<({String uuid, int companyId})?> _loadAdPack({bool forceNetwork = false}) async {
+    // 1. ใช้ memory cache ก่อน (เร็วที่สุด)
+    if (!forceNetwork && _cachedUuid != null && _cachedCompanyId != null) {
+      return (uuid: _cachedUuid!, companyId: _cachedCompanyId!);
+    }
+
+    // 2. ลองอ่านจาก Secure Storage (ออฟไลน์ได้)
+    try {
+      final storedUuid = await _storage.read(key: 'adpack_uuid');
+      final storedCid = await _storage.read(key: 'adpack_company_id');
+      if (storedUuid != null && storedCid != null) {
+        final cid = int.tryParse(storedCid);
+        if (cid != null) {
+          _cachedUuid = storedUuid;
+          _cachedCompanyId = cid;
+          log("AdPack loaded from local cache: uuid=$storedUuid cid=$cid");
+          // ถ้าไม่ได้บังคับ network ก็ใช้ cache ได้เลย
+          if (!forceNetwork) {
+            return (uuid: storedUuid, companyId: cid);
+          }
+        }
+      }
+    } catch (e) {
+      log("Read adpack cache error: $e");
+    }
+
+    // 3. ดึงจาก Firestore (ต้องมีเน็ต)
+    try {
+      final firestoreService = FirestoreService();
+      final doc = await firestoreService.getAdpack();
+      final String uuid = doc['uuid']?.toString() ?? '';
+      final dynamic rawCid = doc['companyID'];
+      int companyId;
+      if (rawCid is int) {
+        companyId = rawCid;
+      } else if (rawCid is String) {
+        companyId = int.tryParse(rawCid) ??
+            (rawCid.startsWith('0x')
+                ? int.tryParse(rawCid.substring(2), radix: 16) ?? 0
+                : 0);
+      } else {
+        companyId = 0;
+      }
+
+      if (uuid.isNotEmpty && companyId != 0) {
+        _cachedUuid = uuid;
+        _cachedCompanyId = companyId;
+        // บันทึกลง storage เพื่อใช้ตอนออฟไลน์ครั้งหน้า
+        await _storage.write(key: 'adpack_uuid', value: uuid);
+        await _storage.write(key: 'adpack_company_id', value: companyId.toString());
+        log("AdPack fetched from Firestore & cached: uuid=$uuid cid=$companyId");
+        return (uuid: uuid, companyId: companyId);
+      }
+    } catch (e) {
+      log("Fetch AdPack from Firestore failed (offline?): $e");
+    }
+
+    // 4. ถ้า forceNetwork แล้ว fail แต่มี cache เก่า ใช้ cache เก่า
+    if (_cachedUuid != null && _cachedCompanyId != null) {
+      return (uuid: _cachedUuid!, companyId: _cachedCompanyId!);
+    }
+
+    return null;
+  }
+
+  /// เรียกตอนแอปเริ่มหรือตอนมีเน็ต เพื่อ pre-cache config
+  static Future<void> preloadAdPack() async {
+    await _loadAdPack(forceNetwork: true);
+  }
+
+  // รับค่า bleKey (hex payload) ที่ต้องการส่ง
   static Future<void> startAdvertising(String bleKey) async {
-    final FirestoreService firestoreService = FirestoreService();
-    // ดึงข้อมูล UUID,CompanyID ของ Advertising Package จากใน Firebase
-    final doc = await firestoreService.getAdpack();
-    String uuid = doc['uuid'];
-    int companyid = doc['companyID'];
-
-    // ตั้งค่า Advertising Package
-    String uuID = uuid;
-    int companyID = companyid;
-    bool devicename = false;
-    bool connectable = false;
-    bool txpowerlevel = false;
-
-    // แสดง Log ค่า Key ก่อนทำการเข้ารหัส
-    log("Key BLE = $bleKey");
-
-    // ตรวจสอบว่า Key เป็นค่าว่างหรือไม่
-    if (bleKey.isEmpty) {
-      // ถ้าว่าง ให้จบการทำงานทันที
+    // ดึง config จาก cache ก่อน (เร็ว + ออฟไลน์ได้)
+    final adpack = await _loadAdPack();
+    if (adpack == null) {
+      log("startAdvertising aborted: no AdPack config available");
       return;
     }
 
-    // ส่งคำสั่งไปยัง Native Android ผ่าน MethodChannel
+    final String uuID = adpack.uuid;
+    final int companyID = adpack.companyId;
+    const bool devicename = false;
+    const bool connectable = false;
+    const bool txpowerlevel = false;
+
+    log("Key BLE = $bleKey | uuid=$uuID cid=$companyID");
+
+    if (bleKey.isEmpty) {
+      return;
+    }
+
+    // ส่งคำสั่งไปยัง Native Android ผ่าน MethodChannel (ไม่รอ network)
     await channel.invokeMethod('startAdvertising', {
-      // UUID ของ Service ที่ต้องการส่ง (ต้องตรงกับตัวรับ)
       'uuid': uuID,
-      // Company ID (ใช้ 0xFFFF สำหรับการทดสอบ)
       'companyId': companyID,
-      // ข้อมูล Data ที่แปลงเป็น Hex แล้ว
       'data': bleKey,
-      // ส่งชื่ออุปกรณ์
       'devicename': devicename,
-      // กำหนดว่าไม่ต้องให้ใครมาเชื่อมต่อ (Connectable = false)
       'connectable': connectable,
-      // ส่งค่าความแรงสัญญาน tx power
       'txpowerlevel': txpowerlevel,
     });
   }
 
   // ฟังก์ชันสำหรับรอฟัง Callback จาก Native ว่าเริ่มส่งสัญญาณสำเร็จแล้ว
   static void listenAdvertisingStarted(VoidCallback onStarted) {
-    // ตั้งค่า Handler เพื่อรอรับการเรียกกลับจาก Native
     channel.setMethodCallHandler((call) async {
-      // ตรวจสอบชื่อ Method ที่ Native ส่งมา
       if (call.method == 'onAdvertisingStarted') {
-        // ถ้าชื่อตรงกัน ให้เรียกฟังก์ชัน onStarted() ที่ UI ส่งมา
         onStarted();
       }
     });
   }
 
   static Future<void> stopAdvertising() async {
-    // ส่งคำสั่ง stop ไปยัง Native Android
-    await channel.invokeMethod('stopAdvertising');
+    try {
+      await channel.invokeMethod('stopAdvertising');
+      log("Native stopAdvertising called");
+    } catch (e) {
+      log("stopAdvertising error: $e");
+    }
   }
 }
