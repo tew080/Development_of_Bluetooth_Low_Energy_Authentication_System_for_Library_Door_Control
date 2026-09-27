@@ -48,7 +48,122 @@ def fetch_ble_config():
         log(f"❌ Fetch Config Error: {e}")
 
 
+def _load_pending_queue():
+    """โหลดคิว attendance ที่ค้างจากไฟล์"""
+    path = getattr(Config, "PENDING_ATTENDANCE_QUEUE_FILE", "DB_Cache/pending_attendance_queue.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except Exception as e:
+            log(f"[WARN] Load pending attendance queue failed: {e}")
+    return []
+
+
+def _save_pending_queue(queue):
+    """บันทึกคิว attendance ที่ค้างลงไฟล์"""
+    path = getattr(Config, "PENDING_ATTENDANCE_QUEUE_FILE", "DB_Cache/pending_attendance_queue.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(queue, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log(f"[WARN] Save pending attendance queue failed: {e}")
+
+
+def _enqueue_attendance(payload: dict):
+    """เพิ่มรายการเข้า offline queue (memory + ไฟล์)"""
+    with shared_state.pending_attendance_lock:
+        shared_state.pending_attendance_queue.append(payload)
+        _save_pending_queue(shared_state.pending_attendance_queue)
+    log(f"- [OFFLINE QUEUE] Enqueued attendance for {payload.get('doc_id')} (queue size={len(shared_state.pending_attendance_queue)})")
+
+
+def _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log_doc_id):
+    """พยายามเขียน Firestore จริง ถ้าสำเร็จคืน True ถ้าเน็ตหลุด/error คืน False"""
+    if shared_state.db is None:
+        return False
+    try:
+        member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
+        member_ref.set(member_update, merge=True)
+
+        log_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE).document(log_doc_id)
+        log_ref.set(new_log_event)
+        return True
+    except Exception as e:
+        log(f"[OFFLINE] Write to Firestore failed: {e}")
+        return False
+
+
+def flush_pending_attendance_queue():
+    """
+    ดึงรายการในคิวที่ค้างไว้ตอนออฟไลน์ ขึ้น Firestore
+    เรียกได้ทั้งจาก background thread และตอน sync สำเร็จ
+    """
+    with shared_state.pending_attendance_lock:
+        if not shared_state.pending_attendance_queue:
+            # ลองโหลดจากไฟล์เผื่อ process เพิ่งเปิด
+            shared_state.pending_attendance_queue = _load_pending_queue()
+        if not shared_state.pending_attendance_queue:
+            return 0
+
+        remaining = []
+        success_count = 0
+        for item in shared_state.pending_attendance_queue:
+            doc_id = item.get("doc_id")
+            member_update = item.get("member_update", {})
+            new_log_event = item.get("new_log_event", {})
+            log_doc_id = item.get("log_doc_id", "")
+            ok = _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log_doc_id)
+            if ok:
+                success_count += 1
+                # อัปเดต dashboard cache ด้วย
+                try:
+                    update_dashboard_data_file(new_event=new_log_event)
+                except Exception:
+                    pass
+                # อัปเดต in-memory valid_keys ด้วยสถานะล่าสุด
+                for k, v in list(shared_state.valid_keys.items()):
+                    if v.get("doc_id") == doc_id or v.get("member_id") == doc_id:
+                        v["last_status"] = member_update.get("last_status", v.get("last_status"))
+                        v["last_update_date"] = member_update.get("last_update_date", v.get("last_update_date"))
+                        v["last_update_time"] = member_update.get("last_update_time", v.get("last_update_time"))
+            else:
+                remaining.append(item)
+
+        shared_state.pending_attendance_queue = remaining
+        _save_pending_queue(remaining)
+        if success_count:
+            log(f"- [OFFLINE QUEUE] Flushed {success_count} attendance record(s). Remaining={len(remaining)}")
+        return success_count
+
+
+def _pending_queue_flush_worker(interval_seconds=30):
+    """Background thread: พยายาม flush คิวทุก ๆ ช่วงเวลา"""
+    # โหลดคิวจากไฟล์ตอนเริ่ม
+    with shared_state.pending_attendance_lock:
+        shared_state.pending_attendance_queue = _load_pending_queue()
+        if shared_state.pending_attendance_queue:
+            log(f"- Loaded {len(shared_state.pending_attendance_queue)} pending attendance from disk")
+
+    while True:
+        time.sleep(interval_seconds)
+        try:
+            if shared_state.db is not None:
+                flush_pending_attendance_queue()
+        except Exception as e:
+            log(f"❌ Pending queue flush worker error: {e}")
+
+
 def sync_record_attendance(doc_id):
+    """
+    บันทึก Clock-IN / Clock-OUT
+    - ถ้ามีเน็ต + Firestore พร้อม → เขียนทันที
+    - ถ้าไม่มีเน็ต / เขียนไม่ได้ → เก็บเข้า Offline Queue แล้วอัปโหลดทีหลังอัตโนมัติ
+    """
     now = datetime.now()
     today_date = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
@@ -69,20 +184,25 @@ def sync_record_attendance(doc_id):
         last_status = member_info.get("last_status", "Clock-OUT")
         last_update_date = member_info.get("last_update_date", "")
     else:
-        # Fallback กรณีไม่มีใน RAM memory จริงๆ
-        member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
-        member_doc = member_ref.get()
-        if member_doc.exists:
-            member_data = member_doc.to_dict()
-            prefix = member_data.get("prefix", "")
-            first_name = member_data.get("first_name", "ไม่ระบุ")
-            last_name = member_data.get("last_name", "")
-            faculty = member_data.get("faculty", "ไม่ระบุ")
-            branch = member_data.get("branch", "ไม่ระบุ")
-            last_status = member_data.get("last_status", "Clock-OUT")
-            last_update_date = member_data.get("last_update_date", "")
-        else:
-            prefix, first_name, last_name, faculty, branch, last_status, last_update_date = "", "ไม่ระบุ", "", "ไม่ระบุ", "ไม่ระบุ", "Clock-OUT", ""
+        # Fallback กรณีไม่มีใน RAM memory จริงๆ (ต้องมีเน็ต)
+        prefix, first_name, last_name, faculty, branch, last_status, last_update_date = (
+            "", "ไม่ระบุ", "", "ไม่ระบุ", "ไม่ระบุ", "Clock-OUT", ""
+        )
+        if shared_state.db is not None:
+            try:
+                member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
+                member_doc = member_ref.get()
+                if member_doc.exists:
+                    member_data = member_doc.to_dict()
+                    prefix = member_data.get("prefix", "")
+                    first_name = member_data.get("first_name", "ไม่ระบุ")
+                    last_name = member_data.get("last_name", "")
+                    faculty = member_data.get("faculty", "ไม่ระบุ")
+                    branch = member_data.get("branch", "ไม่ระบุ")
+                    last_status = member_data.get("last_status", "Clock-OUT")
+                    last_update_date = member_data.get("last_update_date", "")
+            except Exception as e:
+                log(f"[OFFLINE] Fallback member fetch failed: {e}")
 
     is_first_visit_today = False
     if last_update_date != today_date:
@@ -91,22 +211,14 @@ def sync_record_attendance(doc_id):
     else:
         new_status = "Clock-IN" if last_status == "Clock-OUT" else "Clock-OUT"
 
-    # 🔥 OPTIMIZATION 2: รวมการตั้งค่า checkinoutStatus = True ไว้ใน Write เดียวกัน
-    member_ref = shared_state.db.collection(Config.COLLECTION_MEMBER).document(doc_id)
-    member_ref.set(
-        {
-            "last_status": new_status,
-            "last_update_date": today_date,
-            "last_update_time": time_str,
-            "checkinoutStatus": True
-        },
-        merge=True
-    )
+    member_update = {
+        "last_status": new_status,
+        "last_update_date": today_date,
+        "last_update_time": time_str,
+        "checkinoutStatus": True,
+    }
 
-    # บันทึก Attendance Log (1 Write)
     log_doc_id = f"{today_date}_{time_str.replace(':', '')}_{doc_id}"
-    log_ref = shared_state.db.collection(Config.COLLECTION_ATTENDANCE).document(log_doc_id)
-
     new_log_event = {
         "member_id": doc_id,
         "prefix": prefix,
@@ -119,12 +231,42 @@ def sync_record_attendance(doc_id):
         "action": new_status,
         "is_first_visit": is_first_visit_today,
     }
-    log_ref.set(new_log_event)
 
-    log(f"- Firebase Updated: [{new_status}] User: {doc_id} (checkinoutStatus: True)")
+    # อัปเดต in-memory ทันที (ไม่ว่าจะเขียน Firestore สำเร็จหรือไม่)
+    for k, v in list(shared_state.valid_keys.items()):
+        if v.get("doc_id") == doc_id or v.get("member_id") == doc_id:
+            v["last_status"] = new_status
+            v["last_update_date"] = today_date
+            v["last_update_time"] = time_str
 
-    # 🔥 OPTIMIZATION 3: อัปเดตไฟล์แดชบอร์ดโดยการส่ง new_log_event เข้า Local Cache (0 Reads!)
-    update_dashboard_data_file(new_event=new_log_event)
+    # พยายามเขียน Firestore
+    written = _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log_doc_id)
+
+    if written:
+        log(f"- Firebase Updated: [{new_status}] User: {doc_id} (checkinoutStatus: True)")
+        # อัปเดต dashboard ทันที
+        update_dashboard_data_file(new_event=new_log_event)
+        # ถ้ามีของค้างในคิว ลอง flush ด้วย
+        try:
+            flush_pending_attendance_queue()
+        except Exception:
+            pass
+    else:
+        # ไม่มีเน็ต / เขียนไม่ได้ → เข้าคิว
+        payload = {
+            "doc_id": doc_id,
+            "member_update": member_update,
+            "new_log_event": new_log_event,
+            "log_doc_id": log_doc_id,
+            "queued_at": now.isoformat(),
+        }
+        _enqueue_attendance(payload)
+        # อัปเดต dashboard จาก local event อยู่ดี (UI ยังเห็นทันที)
+        try:
+            update_dashboard_data_file(new_event=new_log_event)
+        except Exception:
+            pass
+        log(f"- [OFFLINE] Queued [{new_status}] User: {doc_id} (will upload when online)")
 
 
 # นำโค้ดนี้ไปแทนที่ฟังก์ชันเดิมใน db_manager.py
@@ -476,6 +618,13 @@ def init_firebase():
         fetch_ble_config()
         shared_state.db.collection(Config.COLLECTION_MEMBER).on_snapshot(on_snapshot_update)
         threading.Thread(target=_periodic_dashboard_refresh, daemon=True).start()
+        # Offline attendance queue flusher (อัปโหลดของค้างเมื่อมีเน็ตกลับมา)
+        threading.Thread(target=_pending_queue_flush_worker, daemon=True).start()
+        # ลอง flush คิวที่ค้างไว้ทันทีตอนเริ่มระบบ
+        try:
+            flush_pending_attendance_queue()
+        except Exception:
+            pass
         log("- Firebase Connected & Syncing...")
     except Exception as e:
         log(f"❌ Firebase Init Error: {e}")

@@ -18,4 +18,5 @@ class Config:
     CACHE_DIR = "DB_Cache"
     USERS_CACHE_FILE = "DB_Cache/users_cache.json"
     LOGS_CACHE_FILE = "DB_Cache/logs_cache.json"
-    
+    # คิวสำหรับเก็บ attendance ที่ยังอัปโหลดไม่ได้ตอนออฟไลน์
+    PENDING_ATTENDANCE_QUEUE_FILE = "DB_Cache/pending_attendance_queue.json"
