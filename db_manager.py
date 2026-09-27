@@ -25,8 +25,59 @@ import json
 # (มี load/save local cache เพิ่มเข้ามา) เวอร์ชันแรกที่เคยอยู่ตรงนี้ถูกลบออกแล้ว
 # เพราะ Python จะใช้ def ตัวหลังสุดอยู่แล้ว การมี 2 ตัวซ้ำมีแต่จะทำให้สับสนตอนแก้โค้ดต่อ
 
+def _mark_offline(reason: str):
+    """Force offline mode so we stop burning quota and rely on local cache + queue."""
+    shared_state.is_offline = True
+    shared_state.offline_reason = reason
+    log(f"🔴 OFFLINE MODE ACTIVATED → {reason}")
+
+def _mark_online():
+    if shared_state.is_offline:
+        log("🟢 ONLINE MODE RESTORED")
+    shared_state.is_offline = False
+    shared_state.offline_reason = ""
+    
+def _load_ble_config_cache():
+    """โหลด UUID + CompanyID จากไฟล์เมื่อออฟไลน์"""
+    path = getattr(Config, "BLE_CONFIG_CACHE_FILE", "DB_Cache/ble_config_cache.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                Config.TARGET_UUID = str(data.get("uuid", "")).lower()
+                comp_id = data.get("companyID")
+                if isinstance(comp_id, str):
+                    Config.COMPANY_ID = int(comp_id, 16)
+                else:
+                    Config.COMPANY_ID = int(comp_id)
+                log(f"- [OFFLINE] Loaded BLE Config from cache → UUID: {Config.TARGET_UUID}")
+                return True
+        except Exception as e:
+            log(f"[WARN] Load BLE config cache failed: {e}")
+    return False
+
+
+def _save_ble_config_cache():
+    """บันทึก UUID + CompanyID ลงไฟล์"""
+    path = getattr(Config, "BLE_CONFIG_CACHE_FILE", "DB_Cache/ble_config_cache.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "uuid": Config.TARGET_UUID,
+                "companyID": Config.COMPANY_ID
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log(f"[WARN] Save BLE config cache failed: {e}")
+
 
 def fetch_ble_config():
+    if shared_state.is_offline or shared_state.db is None:
+        # ถ้าออฟไลน์แล้ว → โหลดจาก cache แทน
+        if not getattr(Config, "TARGET_UUID", None):
+            _load_ble_config_cache()
+        return
+
     try:
         config_ref = (
             shared_state.db.collection(Config.COLLECTION_CONFIG)
@@ -41,11 +92,20 @@ def fetch_ble_config():
                 Config.COMPANY_ID = int(comp_id, 16)
             else:
                 Config.COMPANY_ID = int(comp_id)
+            
+            _save_ble_config_cache()   # ← เซฟไว้ใช้ตอนออฟไลน์
             log(
                 f"- Config Loaded -> UUID: {Config.TARGET_UUID}, CompanyID: {hex(Config.COMPANY_ID)}"
             )
+        _mark_online()
     except Exception as e:
-        log(f"❌ Fetch Config Error: {e}")
+        err = str(e)
+        if "429" in err or "Quota" in err or "resource_exhausted" in err.lower():
+            _mark_offline(f"Fetch Config 429: {err}")
+            # พยายามโหลดจาก cache ทันที
+            _load_ble_config_cache()
+        else:
+            log(f"❌ Fetch Config Error: {e}")
 
 
 def _load_pending_queue():
@@ -94,6 +154,9 @@ def _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log
         log_ref.set(new_log_event)
         return True
     except Exception as e:
+        err = str(e)
+        if "429" in err or "Quota" in err:
+            _mark_offline(f"Write attendance 429: {err}")
         log(f"[OFFLINE] Write to Firestore failed: {e}")
         return False
 
@@ -151,11 +214,14 @@ def _pending_queue_flush_worker(interval_seconds=30):
 
     while True:
         time.sleep(interval_seconds)
+        if shared_state.is_offline:
+            continue
         try:
             if shared_state.db is not None:
                 flush_pending_attendance_queue()
         except Exception as e:
-            log(f"❌ Pending queue flush worker error: {e}")
+            if "429" in str(e) or "Quota" in str(e):
+                _mark_offline(str(e))
 
 
 def sync_record_attendance(doc_id):
@@ -240,13 +306,14 @@ def sync_record_attendance(doc_id):
             v["last_update_time"] = time_str
 
     # พยายามเขียน Firestore
-    written = _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log_doc_id)
+    if shared_state.is_offline or shared_state.db is None:
+        written = False
+    else:
+        written = _try_write_attendance_to_firestore(doc_id, member_update, new_log_event, log_doc_id)
 
     if written:
         log(f"- Firebase Updated: [{new_status}] User: {doc_id} (checkinoutStatus: True)")
-        # อัปเดต dashboard ทันที
         update_dashboard_data_file(new_event=new_log_event)
-        # ถ้ามีของค้างในคิว ลอง flush ด้วย
         try:
             flush_pending_attendance_queue()
         except Exception:
@@ -261,11 +328,14 @@ def sync_record_attendance(doc_id):
             "queued_at": now.isoformat(),
         }
         _enqueue_attendance(payload)
-        # อัปเดต dashboard จาก local event อยู่ดี (UI ยังเห็นทันที)
+
+        # อัปเดต dashboard จาก local event ทันที (รองรับโหมดจำลองออฟไลน์)
         try:
             update_dashboard_data_file(new_event=new_log_event)
+            notify_new_data_available()   # ← เพิ่มบรรทัดนี้
         except Exception:
             pass
+
         log(f"- [OFFLINE] Queued [{new_status}] User: {doc_id} (will upload when online)")
 
 
@@ -601,34 +671,47 @@ def _periodic_dashboard_refresh(interval_seconds=60):
     """
     while True:
         time.sleep(interval_seconds)
+        if shared_state.is_offline:
+            continue
         try:
             if shared_state.db is not None:
                 update_dashboard_data_file(skip_ai_trigger=True)
         except Exception as e:
-            log(f"❌ Periodic Dashboard Refresh Error: {e}")
-
+            if "429" in str(e) or "Quota" in str(e):
+                _mark_offline(str(e))
 
 def init_firebase():
     try:
-        load_local_users_cache() # ดึงจากไฟล์แคชก่อน
+        load_local_users_cache()
+        _load_ble_config_cache()
         if not firebase_admin._apps:
             cred = fb_credentials.Certificate(Config.FB_KEY_PATH)
             firebase_admin.initialize_app(cred)
         shared_state.db = firestore.client()
+        
         fetch_ble_config()
-        shared_state.db.collection(Config.COLLECTION_MEMBER).on_snapshot(on_snapshot_update)
+        
+        # ตั้ง snapshot เฉพาะตอนยังออนไลน์เท่านั้น
+        if not shared_state.is_offline:
+            shared_state.db.collection(Config.COLLECTION_MEMBER).on_snapshot(on_snapshot_update)
+        
         threading.Thread(target=_periodic_dashboard_refresh, daemon=True).start()
-        # Offline attendance queue flusher (อัปโหลดของค้างเมื่อมีเน็ตกลับมา)
         threading.Thread(target=_pending_queue_flush_worker, daemon=True).start()
-        # ลอง flush คิวที่ค้างไว้ทันทีตอนเริ่มระบบ
+        
         try:
             flush_pending_attendance_queue()
         except Exception:
             pass
-        log("- Firebase Connected & Syncing...")
+            
+        if shared_state.is_offline:
+            log("- Firebase เริ่มแบบ OFFLINE (ใช้ cache + queue)")
+        else:
+            log("- Firebase Connected & Syncing...")
     except Exception as e:
         log(f"❌ Firebase Init Error: {e}")
-        exit(1)
+        # แม้ init fail ก็ยังให้ระบบรันต่อด้วย offline
+        shared_state.is_offline = True
+        shared_state.offline_reason = str(e)
 
 def on_snapshot_update(col_snapshot, changes, read_time):
     try:

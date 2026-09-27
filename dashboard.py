@@ -64,7 +64,7 @@ def _get_cached_members(force_refresh=False):
     needs_fetch = force_refresh or (_last_members_fetch_timestamp is None) or \
                   ((now_ts - _last_members_fetch_timestamp).total_seconds() > MEMBERS_CACHE_EXPIRATION_MINUTES * 60)
     
-    if needs_fetch and shared_state.db is not None:
+    if needs_fetch and shared_state.db is not None and not getattr(shared_state, "is_offline", False):
         try:
             member_collection = getattr(Config, "COLLECTION_MEMBER", "MEMBER")
             member_docs = shared_state.db.collection(member_collection).stream()
@@ -86,6 +86,10 @@ def _get_cached_members(force_refresh=False):
                 _last_members_fetch_timestamp = now_ts
                 log(f"- [Members Cache Updated] Fetched {len(_members_cache)} members from DB.")
         except Exception as ex_mem:
+            err = str(ex_mem)
+            if "429" in err or "Quota" in err or "resource_exhausted" in err.lower():
+                from db_manager import _mark_offline
+                _mark_offline(f"Fetch COLLECTION_MEMBER 429: {err}")
             log(f"[ERROR] Fetch COLLECTION_MEMBER Error: {ex_mem}")
 
     registered_members_dict = dict(_members_cache)

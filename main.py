@@ -845,6 +845,9 @@ def setup_gui():
 
         root.after(100, update_gui)
 
+    if getattr(shared_state, "is_offline", False):
+        lbl_status.config(text="OFFLINE", fg="#f39c12")
+
     update_gui()
     return root
 
