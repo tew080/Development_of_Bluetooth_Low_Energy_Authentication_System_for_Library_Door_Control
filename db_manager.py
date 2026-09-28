@@ -329,15 +329,17 @@ def sync_record_attendance(doc_id):
         }
         _enqueue_attendance(payload)
 
-        # อัปเดต dashboard จาก local event ทันที (รองรับโหมดจำลองออฟไลน์)
+        # อัปเดตแดชบอร์ดจาก local เท่านั้น — ห้าม force_refresh (จะไปยิง Firestore)
         try:
-            update_dashboard_data_file(new_event=new_log_event)
-            notify_new_data_available()   # ← เพิ่มบรรทัดนี้
-        except Exception:
-            pass
+            update_dashboard_data_file(
+                new_event=new_log_event,
+                force_refresh=False,   # สำคัญ: อย่าดึง cloud ตอนออฟไลน์
+                skip_ai_trigger=True,
+            )
+        except Exception as e:
+            log(f"[WARN] Offline dashboard update failed: {e}")
 
         log(f"- [OFFLINE] Queued [{new_status}] User: {doc_id} (will upload when online)")
-
 
 # นำโค้ดนี้ไปแทนที่ฟังก์ชันเดิมใน db_manager.py
 
@@ -731,6 +733,7 @@ def on_snapshot_update(col_snapshot, changes, read_time):
                     del shared_state.valid_keys[k]
 
                 if key:
+                    offline_secret = str(data.get("offline_secret") or key).strip()  # fallback ใช้ key เดิม
                     shared_state.valid_keys[key] = {
                         "doc_id": doc.id,
                         "member_id": data.get("member_id") or data.get("student_id", doc.id),
@@ -742,6 +745,7 @@ def on_snapshot_update(col_snapshot, changes, read_time):
                         "last_status": data.get("last_status", "Clock-OUT"),
                         "last_update_date": data.get("last_update_date", ""),
                         "last_update_time": data.get("last_update_time", ""),
+                        "offline_secret": offline_secret,  # ← เพิ่ม
                     }
                 has_changes = True
                     

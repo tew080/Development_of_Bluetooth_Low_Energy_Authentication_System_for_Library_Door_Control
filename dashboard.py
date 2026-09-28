@@ -485,10 +485,10 @@ def update_dashboard_data_file(new_event=None, force_refresh=False, skip_ai_trig
                 with open(cache_path, 'w', encoding='utf-8') as f:
                     json.dump(_raw_events_cache, f, ensure_ascii=False)
             
-            elif shared_state.db is not None:
+            elif shared_state.db is not None and not getattr(shared_state, "is_offline", False):
                 now_ts = datetime.now()
                 needs_db_fetch = force_refresh or (_last_fetch_timestamp is None) or \
-                                 ((now_ts - _last_fetch_timestamp).total_seconds() > CACHE_EXPIRATION_MINUTES * 60)
+                                ((now_ts - _last_fetch_timestamp).total_seconds() > CACHE_EXPIRATION_MINUTES * 60)
                 
                 if needs_db_fetch:
                     try:

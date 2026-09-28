@@ -152,21 +152,22 @@ def ble_detection_callback(device, advertisement_data):
                         f"(มี {len(shared_state.valid_keys)} keys)")
 
             elif flag == 0x02:
-                # ===== Offline Mode (TOTP) =====
                 mode = "offline"
                 log(f"🔍 [OFFLINE] TOTP hash จากแพ็กเก็ต: {data4.hex()}")
                 log(f"   กำลังเทียบกับ {len(shared_state.valid_keys)} secrets (window ±1)...")
 
                 checked = 0
-                for secret, info in shared_state.valid_keys.items():
+                for secret_key, info in shared_state.valid_keys.items():
+                    # ใช้ offline_secret ถ้ามี ไม่งั้น fallback เป็น key เดิม (รองรับสมาชิกเก่า)
+                    totp_base = info.get("offline_secret") or secret_key
                     for offset in (-1, 0, 1):
-                        expected = generate_totp_hash(secret, offset=offset)
+                        expected = generate_totp_hash(totp_base, offset=offset)
                         checked += 1
                         if expected == data4:
-                            matched_secret = secret
+                            matched_secret = secret_key
                             user_info = info
                             log(
-                                f"✅ [OFFLINE] MATCH → secret={secret[:8]}... "
+                                f"✅ [OFFLINE] MATCH → offline_secret={totp_base[:8]}... "
                                 f"| offset={offset:+d} | hash={expected.hex()} "
                                 f"| user={info.get('doc_id')}"
                             )
@@ -177,6 +178,7 @@ def ble_detection_callback(device, advertisement_data):
                 if matched_secret is None:
                     log(f"❌ [OFFLINE] NO MATCH หลังเทียบ {checked} hashes "
                         f"(secrets={len(shared_state.valid_keys)})")
+
             else:
                 log(f"⚠ Flag ไม่รู้จัก: 0x{flag:02X} — ลองตีความเป็น legacy")
                 print_packet_details(device, advertisement_data, raw_data, flag, data4)
