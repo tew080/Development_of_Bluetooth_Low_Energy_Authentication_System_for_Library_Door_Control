@@ -29,6 +29,7 @@ class AdvertisePage extends StatefulWidget {
 class _AdvertisePageState extends State<AdvertisePage> {
   bool advertising = false;
   String currentKey = "";
+  String currentOfflineSecret = "";
   bool _isFirstLoad = true;
 
   // Timer + cancellation flag เพื่อแก้บัคกดหยุดไม่ได้ตอน offline
@@ -97,69 +98,78 @@ class _AdvertisePageState extends State<AdvertisePage> {
   }
 
   Future<void> _generateBleKey() async {
-    String? storedKey = await storage.read(key: 'my_secret_key');
-    String newKey = "";
-    if (storedKey != null && storedKey.isNotEmpty) {
-      newKey = storedKey;
-      log('Found existing key: $newKey');
-    } else {
-      log('Creating new key...');
-      newKey = generateKey(8, "key");
-      await storage.write(key: 'my_secret_key', value: newKey);
-      // พยายามอัปเดต Firestore (ถ้าออฟไลน์จะ fail เงียบ ๆ)
-      try {
-        await FirestoreService().updateUser(widget.studentId, {'key': newKey});
-      } catch (e) {
-        log('updateUser key failed (offline?): $e');
+    String? onlineKey = await storage.read(key: 'my_secret_key');
+    String? offlineSecret = await storage.read(key: 'my_offline_secret');
+
+    // สร้างเฉพาะเมื่อยังไม่มีในเครื่อง (ไม่สนเน็ต)
+    if (onlineKey == null || onlineKey.isEmpty) {
+      onlineKey = generateKey(8, "key");
+      await storage.write(key: 'my_secret_key', value: onlineKey);
+      log('Created new online key (local): $onlineKey');
+    }
+    if (offlineSecret == null || offlineSecret.isEmpty) {
+      // ใช้ 32 hex ให้อินโทรปีสูง (เดิม 10 สั้นเกินไป)
+      offlineSecret = generateKey(32, "key");
+      await storage.write(key: 'my_offline_secret', value: offlineSecret);
+      log('Created new offline_secret (local): ${offlineSecret.substring(0, 8)}...');
+    }
+
+    // อัป Firestore เฉพาะตอนมีเน็ต — fail แล้วไม่ลบของในเครื่อง
+    try {
+      final hasNet = await NetworkService.onConnectivityChanged.first
+          .timeout(const Duration(milliseconds: 800), onTimeout: () => false);
+      if (hasNet) {
+        await FirestoreService().updateUser(widget.studentId, {
+          'key': onlineKey,
+          'offline_secret': offlineSecret,
+        });
+        log('Synced both keys to Firestore');
+      } else {
+        log('Offline → keep local keys, skip Firestore sync');
       }
-      log('newKey :$newKey');
+    } catch (e) {
+      log('updateUser keys failed (offline?): $e');
     }
-    if (newKey.isEmpty) {
-      log('ไม่พบ key');
-      return;
-    }
-    _autoStart(newKey);
+
+    // ตั้ง UI เสมอ ไม่ว่าเน็ตจะมีหรือไม่
+    _autoStart(onlineKey, offlineSecret);
   }
 
-  void _autoStart(String newKey) {
+  void _autoStart(String onlineKey, String offlineSecret) {
     if (mounted) {
       setState(() {
-        currentKey = newKey;
+        currentKey = onlineKey;
+        currentOfflineSecret = offlineSecret;
       });
     }
     if (_isFirstLoad) {
       _isFirstLoad = false;
-      startBurstAdvertising(newKey);
+      startBurstAdvertising(onlineKey, offlineSecret);
     }
   }
 
   /// สร้าง Dynamic Payload ณ เวลาปัจจุบัน (เร็ว ไม่รอ network)
-  Future<String> _buildPayload(String secretKey) async {
-    bool hasNet = false;
-    try {
-      // timeout สั้น ๆ เพื่อไม่ให้ค้างตอน offline
-      hasNet = await NetworkService.onConnectivityChanged.first
-          .timeout(const Duration(milliseconds: 800), onTimeout: () => false);
-    } catch (e) {
-      hasNet = false;
-    }
+  Future<String> _buildPayload(String onlineKey, String offlineSecret) async {
+    // ใช้ offline_secret + TOTP เสมอ
+    // เหตุผล: มือถือมีเน็ต ≠ ประตูมีเน็ต
+    // ถ้าส่ง static key (0x01) ตอนประตูออฟไลน์ → NO MATCH แน่นอน
+    final String secretForPayload =
+        offlineSecret.isNotEmpty ? offlineSecret : onlineKey;
 
-    final bool isOffline = !hasNet;
     final String payload = TotpService.generateDynamicPayload(
-      secretKey: secretKey,
-      isOffline: isOffline,
+      secretKey: secretForPayload,
+      isOffline: true, // ← บังคับ TOTP เสมอ
     );
-    log("Payload | offline=$isOffline | $payload");
+    log("Payload | forceOfflineTOTP=true | $payload");
     return payload;
   }
-
-  Future<void> startBurstAdvertising(String key) async {
-    if (key.isEmpty) {
+  
+  Future<void> startBurstAdvertising(String onlineKey, String offlineSecret) async {
+    if (onlineKey.isEmpty) {
       log("startBurstAdvertising: key empty → abort");
       return;
     }
 
-    // รีเซ็ต flag
     _stopRequested = false;
     _isStopping = false;
 
@@ -191,12 +201,11 @@ class _AdvertisePageState extends State<AdvertisePage> {
       });
     }
 
-    // ยกเลิก Timer เก่า
     _bleRefreshTimer?.cancel();
     _bleRefreshTimer = null;
 
-    // สร้าง payload + เริ่มส่งทันที (ไม่รออะไรเพิ่ม)
-    final String firstPayload = await _buildPayload(key);
+    // ← ส่ง 2 ตัว
+    final String firstPayload = await _buildPayload(onlineKey, offlineSecret);
     if (_stopRequested) return;
 
     await BleService.startAdvertising(firstPayload);
@@ -208,9 +217,6 @@ class _AdvertisePageState extends State<AdvertisePage> {
       });
     }
 
-    // Timer สำหรับ Burst (ทั้ง online/offline ใช้โครงสร้างเดียวกันเพื่อความสม่ำเสมอ)
-    // Online: รีเฟรช payload ใหม่ทุกช่วง (TOTP ยังเปลี่ยนได้ถ้าต้องการ) + ไม่ stop กลางคัน
-    // Offline: start → รอ → stop → วน
     _bleRefreshTimer = Timer.periodic(_burstOn + _burstOff, (timer) async {
       if (_stopRequested || !timer.isActive) {
         return;
@@ -223,13 +229,13 @@ class _AdvertisePageState extends State<AdvertisePage> {
           return;
         }
 
-        final String payload = await _buildPayload(key);
+        // ← ส่ง 2 ตัว
+        final String payload = await _buildPayload(onlineKey, offlineSecret);
         if (_stopRequested || !timer.isActive) return;
 
         await BleService.startAdvertising(payload);
         log("Burst Start | $payload");
 
-        // Offline เท่านั้นที่ทำ stop หลังช่วง on
         if (!hasNet) {
           await Future.delayed(_burstOn);
           if (_stopRequested || !timer.isActive) return;
@@ -662,7 +668,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
                             if (advertising) {
                               stop();
                             } else {
-                              startBurstAdvertising(currentKey);
+                              startBurstAdvertising(currentKey, currentOfflineSecret);
                             }
                           },
                     child: _isStopping

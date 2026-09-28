@@ -48,10 +48,20 @@ void main() async {
   bool hasNet = await NetworkService.onConnectivityChanged.first;
 
   if (studentIDCheck != null && hasNet) {
-    log('Random new key...');
-    String newKey = generateKey(8, "key");
-    await storage.write(key: 'my_secret_key', value: newKey);
-    await FirestoreService().updateUser(studentIDCheck, {'key': newKey});
+    log('Rotate online key only...');
+    final String newOnlineKey = generateKey(8, "key");
+    try {
+      // เขียน cloud ก่อน แล้วค่อยทับ local — ถ้า fail จะไม่ทับ key เดิมในเครื่อง
+      await FirestoreService().updateUser(studentIDCheck, {
+        'key': newOnlineKey,
+        // ห้ามแตะ offline_secret
+      });
+      await storage.write(key: 'my_secret_key', value: newOnlineKey);
+      log('Online key rotated OK: $newOnlineKey');
+    } catch (e) {
+      log('Skip rotate online key (network/Firestore error): $e');
+      // คง key เดิมใน SecureStorage ไว้ → ปิดเน็ตแล้วคีย์ไม่หาย
+    }
   }
   // รันแอปพลิเคชัน
   runApp(MyApp(startPage: studentIDCheck));
