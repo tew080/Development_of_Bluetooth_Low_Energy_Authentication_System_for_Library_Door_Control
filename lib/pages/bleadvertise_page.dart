@@ -28,8 +28,7 @@ class AdvertisePage extends StatefulWidget {
 
 class _AdvertisePageState extends State<AdvertisePage> {
   bool advertising = false;
-  String currentKey = "";
-  String currentOfflineSecret = "";
+  String currentSecret = ""; // secret ตัวเดียว (หมุนตอน login)
   bool _isFirstLoad = true;
 
   // Timer + cancellation flag เพื่อแก้บัคกดหยุดไม่ได้ตอน offline
@@ -98,75 +97,50 @@ class _AdvertisePageState extends State<AdvertisePage> {
   }
 
   Future<void> _generateBleKey() async {
-    String? onlineKey = await storage.read(key: 'my_secret_key');
-    String? offlineSecret = await storage.read(key: 'my_offline_secret');
-
-    // สร้างเฉพาะเมื่อยังไม่มีในเครื่อง (ไม่สนเน็ต)
-    if (onlineKey == null || onlineKey.isEmpty) {
-      onlineKey = generateKey(8, "key");
-      await storage.write(key: 'my_secret_key', value: onlineKey);
-      log('Created new online key (local): $onlineKey');
+    // ใช้ secret ตัวเดียวที่สร้างตอน login (my_ble_secret)
+    // fallback: คีย์เก่า / สร้างชั่วคราวถ้ายังไม่มี (เช่น session ค้าง)
+    String? secret = await storage.read(key: 'my_ble_secret');
+    if (secret == null || secret.isEmpty) {
+      secret = await storage.read(key: 'my_offline_secret');
     }
-    if (offlineSecret == null || offlineSecret.isEmpty) {
-      // ใช้ 32 hex ให้อินโทรปีสูง (เดิม 10 สั้นเกินไป)
-      offlineSecret = generateKey(32, "key");
-      await storage.write(key: 'my_offline_secret', value: offlineSecret);
-      log('Created new offline_secret (local): ${offlineSecret.substring(0, 8)}...');
+    if (secret == null || secret.isEmpty) {
+      secret = await storage.read(key: 'my_secret_key');
     }
-
-    // อัป Firestore เฉพาะตอนมีเน็ต — fail แล้วไม่ลบของในเครื่อง
-    try {
-      final hasNet = await NetworkService.onConnectivityChanged.first
-          .timeout(const Duration(milliseconds: 800), onTimeout: () => false);
-      if (hasNet) {
-        await FirestoreService().updateUser(widget.studentId, {
-          'key': onlineKey,
-          'offline_secret': offlineSecret,
-        });
-        log('Synced both keys to Firestore');
-      } else {
-        log('Offline → keep local keys, skip Firestore sync');
+    if (secret == null || secret.isEmpty) {
+      secret = generateKey(32, "key");
+      await storage.write(key: 'my_ble_secret', value: secret);
+      log('Created fallback ble secret (local)');
+      try {
+        final hasNet = await NetworkService.onConnectivityChanged.first
+            .timeout(const Duration(milliseconds: 800), onTimeout: () => false);
+        if (hasNet) {
+          await FirestoreService().updateUser(widget.studentId, {'key': secret});
+        }
+      } catch (e) {
+        log('sync fallback secret failed: $e');
       }
-    } catch (e) {
-      log('updateUser keys failed (offline?): $e');
     }
 
-    // ตั้ง UI เสมอ ไม่ว่าเน็ตจะมีหรือไม่
-    _autoStart(onlineKey, offlineSecret);
-  }
-
-  void _autoStart(String onlineKey, String offlineSecret) {
     if (mounted) {
       setState(() {
-        currentKey = onlineKey;
-        currentOfflineSecret = offlineSecret;
+        currentSecret = secret!;
       });
     }
     if (_isFirstLoad) {
       _isFirstLoad = false;
-      startBurstAdvertising(onlineKey, offlineSecret);
+      startBurstAdvertising(secret!);
     }
   }
 
-  /// สร้าง Dynamic Payload ณ เวลาปัจจุบัน (เร็ว ไม่รอ network)
-  Future<String> _buildPayload(String onlineKey, String offlineSecret) async {
-    // ใช้ offline_secret + TOTP เสมอ
-    // เหตุผล: มือถือมีเน็ต ≠ ประตูมีเน็ต
-    // ถ้าส่ง static key (0x01) ตอนประตูออฟไลน์ → NO MATCH แน่นอน
-    final String secretForPayload =
-        offlineSecret.isNotEmpty ? offlineSecret : onlineKey;
-
-    final String payload = TotpService.generateDynamicPayload(
-      secretKey: secretForPayload,
-      isOffline: true, // ← บังคับ TOTP เสมอ
-    );
-    log("Payload | forceOfflineTOTP=true | $payload");
+  String _buildPayload(String secret) {
+    final payload = TotpService.generateBlePayload(secret: secret);
+    log("Payload TOTP | $payload");
     return payload;
   }
-  
-  Future<void> startBurstAdvertising(String onlineKey, String offlineSecret) async {
-    if (onlineKey.isEmpty) {
-      log("startBurstAdvertising: key empty → abort");
+
+  Future<void> startBurstAdvertising(String secret) async {
+    if (secret.isEmpty) {
+      log("startBurstAdvertising: secret empty → abort");
       return;
     }
 
@@ -204,8 +178,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
     _bleRefreshTimer?.cancel();
     _bleRefreshTimer = null;
 
-    // ← ส่ง 2 ตัว
-    final String firstPayload = await _buildPayload(onlineKey, offlineSecret);
+    final String firstPayload = _buildPayload(secret);
     if (_stopRequested) return;
 
     await BleService.startAdvertising(firstPayload);
@@ -229,8 +202,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
           return;
         }
 
-        // ← ส่ง 2 ตัว
-        final String payload = await _buildPayload(onlineKey, offlineSecret);
+        final String payload = _buildPayload(secret);
         if (_stopRequested || !timer.isActive) return;
 
         await BleService.startAdvertising(payload);
@@ -574,7 +546,11 @@ class _AdvertisePageState extends State<AdvertisePage> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  currentKey.isEmpty ? '—' : currentKey,
+                                  currentSecret.isEmpty
+                                      ? '—'
+                                      : (currentSecret.length > 12
+                                          ? '${currentSecret.substring(0, 12)}…'
+                                          : currentSecret),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
@@ -668,7 +644,7 @@ class _AdvertisePageState extends State<AdvertisePage> {
                             if (advertising) {
                               stop();
                             } else {
-                              startBurstAdvertising(currentKey, currentOfflineSecret);
+                              startBurstAdvertising(currentSecret);
                             }
                           },
                     child: _isStopping
