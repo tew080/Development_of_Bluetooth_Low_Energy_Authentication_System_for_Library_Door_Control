@@ -52,16 +52,16 @@ def print_packet_details(device, advertisement_data, raw_data=None, flag=None, d
 def generate_totp_hash(secret_key: str, time_step_seconds: int = 30, offset: int = 0) -> bytes:
     """
     คำนวณ 4-byte TOTP hash ให้ตรงกับฝั่ง Flutter (TotpService)
-    HMAC-SHA256(utf8(secret_key), big-endian-int64(time_block + offset))
+    HMAC-SHA256(utf8(secret_key.lower()), big-endian-int64(time_block + offset))
     แล้วตัดเอา 4 bytes แรก
+    (Flutter normalize secret เป็น lowercase ก่อน hash)
     """
     epoch_seconds = int(time.time())
     time_block = (epoch_seconds // time_step_seconds) + offset
     time_bytes = time_block.to_bytes(8, byteorder="big", signed=False)
-    key_bytes = secret_key.encode("utf-8")
+    key_bytes = str(secret_key).strip().lower().encode("utf-8")
     digest = hmac.new(key_bytes, time_bytes, hashlib.sha256).digest()
     return digest[:4]
-
 
 async def activate_door_unlock(device, lookup_key, user_info):
     shared_state.is_processing = True
@@ -139,35 +139,53 @@ def ble_detection_callback(device, advertisement_data):
 
             if flag == 0x01:
                 # ===== Online Mode =====
+                # Data = 4 bytes แรกของ secret (hex 8 ตัว)
+                # valid_keys เก็บ full secret (32 hex) → จับคู่ด้วย prefix
                 static_key_hex = data4.hex()
                 mode = "online"
-                log(f"🔍 [ONLINE] Lookup static key: {static_key_hex}")
+                log(f"🔍 [ONLINE] Lookup static key prefix: {static_key_hex}")
 
+                # 1) exact match (กรณี key สั้นหรือ legacy)
                 if static_key_hex in shared_state.valid_keys:
                     matched_secret = static_key_hex
                     user_info = shared_state.valid_keys[static_key_hex]
-                    log(f"✅ [ONLINE] MATCH → key={static_key_hex} | user={user_info.get('doc_id')}")
+                    log(f"✅ [ONLINE] EXACT MATCH → key={static_key_hex} | user={user_info.get('doc_id')}")
                 else:
-                    log(f"❌ [ONLINE] NO MATCH → key={static_key_hex} ไม่พบใน valid_keys "
-                        f"(มี {len(shared_state.valid_keys)} keys)")
+                    # 2) prefix match: full secret ขึ้นต้นด้วย 8 hex ตัวแรก
+                    for secret_key, info in shared_state.valid_keys.items():
+                        sk = str(secret_key).strip().lower()
+                        if sk.startswith(static_key_hex):
+                            matched_secret = secret_key
+                            user_info = info
+                            log(
+                                f"✅ [ONLINE] PREFIX MATCH → prefix={static_key_hex} "
+                                f"| full={sk[:16]}... | user={info.get('doc_id')}"
+                            )
+                            break
+                    if matched_secret is None:
+                        log(f"❌ [ONLINE] NO MATCH → prefix={static_key_hex} "
+                            f"(มี {len(shared_state.valid_keys)} keys)")
 
             elif flag == 0x02:
+                # ===== Offline Mode (TOTP dynamic) =====
                 mode = "offline"
                 log(f"🔍 [OFFLINE] TOTP hash จากแพ็กเก็ต: {data4.hex()}")
                 log(f"   กำลังเทียบกับ {len(shared_state.valid_keys)} secrets (window ±1)...")
 
                 checked = 0
                 for secret_key, info in shared_state.valid_keys.items():
-                    # ใช้ offline_secret ถ้ามี ไม่งั้น fallback เป็น key เดิม (รองรับสมาชิกเก่า)
+                    # ใช้ offline_secret ถ้ามี ไม่งั้น fallback เป็น key เดิม
                     totp_base = info.get("offline_secret") or secret_key
+                    if not totp_base or not str(totp_base).strip():
+                        totp_base = secret_key
                     for offset in (-1, 0, 1):
-                        expected = generate_totp_hash(totp_base, offset=offset)
+                        expected = generate_totp_hash(str(totp_base), offset=offset)
                         checked += 1
                         if expected == data4:
                             matched_secret = secret_key
                             user_info = info
                             log(
-                                f"✅ [OFFLINE] MATCH → offline_secret={totp_base[:8]}... "
+                                f"✅ [OFFLINE] MATCH → base={str(totp_base)[:16]}... "
                                 f"| offset={offset:+d} | hash={expected.hex()} "
                                 f"| user={info.get('doc_id')}"
                             )

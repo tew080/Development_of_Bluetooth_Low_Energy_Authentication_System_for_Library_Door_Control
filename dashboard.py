@@ -944,7 +944,7 @@ def show_dashboard_graph():
                             <div class="glass-card p-6 w-full" id="trendChartSection">
                                 <div class="flex justify-between items-center mb-4">
                                     <div>
-                                        <h2 class="text-base font-bold text-slate-700 dark:text-slate-200">แนวโน้มสถิติการเข้าใช้งาน</h2>
+                                        <h2 class="text-base font-bold text-slate-700 dark:text-slate-200">สถิติการเข้าใช้งาน</h2>
                                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">เปรียบเทียบความถี่การเข้าใช้ (ครั้ง) และจำนวนผู้ใช้งานจริง (คน) รายวัน</p>
                                     </div>
                                 </div>
