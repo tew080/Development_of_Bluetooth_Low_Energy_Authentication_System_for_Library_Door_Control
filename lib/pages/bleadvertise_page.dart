@@ -132,9 +132,16 @@ class _AdvertisePageState extends State<AdvertisePage> {
     }
   }
 
-  String _buildPayload(String secret) {
-    final payload = TotpService.generateBlePayload(secret: secret);
-    log("Payload TOTP | $payload");
+  /// สร้าง payload ตามสถานะเน็ต
+  /// - มีเน็ต → Online (Flag 0x01 + static key 4 bytes)
+  /// - ไม่มีเน็ต → Offline (Flag 0x02 + TOTP hash)
+  String _buildPayload(String secret, {required bool hasInternet}) {
+    final payload = TotpService.generateBlePayload(
+      secret: secret,
+      hasInternet: hasInternet,
+    );
+    final mode = hasInternet ? "ONLINE(static)" : "OFFLINE(TOTP)";
+    log("Payload $mode | $payload");
     return payload;
   }
 
@@ -155,8 +162,11 @@ class _AdvertisePageState extends State<AdvertisePage> {
       hasNet = false;
     }
 
+    log(hasNet
+        ? "Online → prefer static key (0x01), subscribe CheckinoutStatus"
+        : "Offline → use TOTP dynamic key (0x02)");
+
     if (hasNet) {
-      log("Online → subscribe CheckinoutStatus");
       _userSubscription?.cancel();
       _userSubscription = FirestoreService()
           .getUserStream(widget.studentId)
@@ -178,7 +188,21 @@ class _AdvertisePageState extends State<AdvertisePage> {
     _bleRefreshTimer?.cancel();
     _bleRefreshTimer = null;
 
-    final String firstPayload = _buildPayload(secret);
+    // จับสถานะเน็ตใหม่ทุกครั้งที่สร้าง payload
+    Future<bool> checkNetNow() async {
+      try {
+        return await NetworkService.onConnectivityChanged.first.timeout(
+          const Duration(milliseconds: 500),
+          onTimeout: () => hasNet,
+        );
+      } catch (_) {
+        return hasNet;
+      }
+    }
+
+    final bool netForFirst = await checkNetNow();
+    final String firstPayload =
+        _buildPayload(secret, hasInternet: netForFirst);
     if (_stopRequested) return;
 
     await BleService.startAdvertising(firstPayload);
@@ -196,18 +220,23 @@ class _AdvertisePageState extends State<AdvertisePage> {
       }
 
       try {
+        final bool netNow = await checkNetNow();
+        hasNet = netNow;
+
         if (hasNet && checkinoutStatus == true) {
           log("CheckinoutStatus=true → stop");
           await stop();
           return;
         }
 
-        final String payload = _buildPayload(secret);
+        final String payload =
+            _buildPayload(secret, hasInternet: hasNet);
         if (_stopRequested || !timer.isActive) return;
 
         await BleService.startAdvertising(payload);
         log("Burst Start | $payload");
 
+        // โหมดออฟไลน์: ปิดโฆษณาช่วงสั้น ๆ เพื่อประหยัดแบต (burst)
         if (!hasNet) {
           await Future.delayed(_burstOn);
           if (_stopRequested || !timer.isActive) return;
